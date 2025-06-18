@@ -148,6 +148,12 @@
     }
   }
   
+  // Get video URL for playback
+  function getVideoUrl(video) {
+    if (!video) return null;
+    return video.url;
+  }
+  
   // Video upload handling
   async function handleVideoUpload() {
     // Open file picker immediately, don't wait for FFmpeg
@@ -189,43 +195,78 @@
     console.log('📁 Video file processing complete - all videos ready for playback');
   }
 
-  // Generate thumbnails in background without blocking video playback
-  async function generateThumbnailInBackground(video) {
-    try {
-      // Initialize FFmpeg only when we need thumbnails
-      if (!ffmpegLoaded && !ffmpegLoading) {
-        console.log('🔄 Initializing FFmpeg for thumbnail generation...');
-        await initializeFFmpeg();
-      }
+  // Thumbnail generation queue and processing flag
+let thumbnailQueue = [];
+let thumbnailProcessing = false;
 
-      // Wait for FFmpeg if it's loading
-      if (ffmpegLoading) {
-        console.log('⏳ Waiting for FFmpeg to load for thumbnail generation...');
-        while (ffmpegLoading) {
-          await new Promise(resolve => setTimeout(resolve, 100));
-        }
-      }
+function enqueueThumbnailJob(video) {
+  thumbnailQueue.push(video);
+  processThumbnailQueue();
+}
 
-      if (!ffmpegLoaded) {
-        console.warn('⚠️ FFmpeg not available, skipping thumbnail generation');
-        return;
-      }
-
-      console.log(`🖼️ Generating thumbnail for: ${video.name}`);
-      const thumbnailUrl = await ffmpegService.generateThumbnail(video.file, 1);
-      console.log(`✅ Thumbnail generated successfully for: ${video.name}`);
-
-      // Update video with thumbnail
-      videos = videos.map(v =>
-        v.id === video.id
-          ? { ...v, thumbnailUrl }
-          : v
-      );
-    } catch (error) {
-      console.warn(`⚠️ Thumbnail generation failed for ${video.name}:`, error.message);
-      // Don't show error to user - thumbnails are optional
+async function processThumbnailQueue() {
+  if (thumbnailProcessing || thumbnailQueue.length === 0) return;
+  thumbnailProcessing = true;
+  const video = thumbnailQueue.shift();
+  try {
+    await generateThumbnailSerial(video);
+  } finally {
+    thumbnailProcessing = false;
+    // Process next job
+    if (thumbnailQueue.length > 0) {
+      processThumbnailQueue();
     }
   }
+}
+
+// Generate thumbnails serially (called by queue processor)
+async function generateThumbnailSerial(video) {
+  try {
+    console.log(`🖼️ [QUEUE] Starting thumbnail generation for: ${video.name} (ID: ${video.id})`);
+    // Initialize FFmpeg only when we need thumbnails
+    if (!ffmpegLoaded && !ffmpegLoading) {
+      console.log('🔄 Initializing FFmpeg for thumbnail generation...');
+      await initializeFFmpeg();
+    }
+    // Wait for FFmpeg if it's loading
+    if (ffmpegLoading) {
+      console.log('⏳ Waiting for FFmpeg to load for thumbnail generation...');
+      while (ffmpegLoading) {
+        await new Promise(resolve => setTimeout(resolve, 100));
+      }
+    }
+    if (!ffmpegLoaded) {
+      console.warn('⚠️ FFmpeg not available, skipping thumbnail generation');
+      return;
+    }
+    console.log(`🖼️ FFmpeg ready, generating thumbnail for: ${video.name}`);
+    const thumbnailUrl = await ffmpegService.generateThumbnail(video.file, 1);
+    console.log(`✅ Thumbnail URL generated:`, thumbnailUrl);
+    // Update video with thumbnail
+    const updatedVideos = videos.map(v =>
+      v.id === video.id
+        ? { ...v, thumbnailUrl, processing: false, loaded: true }
+        : v
+    );
+    console.log(`🔄 Updating video ${video.id} with thumbnail URL`);
+    videos = updatedVideos;
+    // Log the updated video object to verify
+    const updatedVideo = videos.find(v => v.id === video.id);
+    console.log(`📝 Updated video object:`, updatedVideo);
+  } catch (error) {
+    console.error(`❌ Thumbnail generation failed for ${video.name}:`, error);
+    console.error('Error stack:', error.stack);
+    // Mark as loaded even if thumbnail generation failed
+    videos = videos.map(v => v.id === video.id ? { ...v, loaded: true, processing: false } : v);
+  }
+}
+
+// Backwards-compatible background generator (now enqueues)
+function generateThumbnailInBackground(video) {
+  // Mark as processing
+  videos = videos.map(v => v.id === video.id ? { ...v, processing: true } : v);
+  enqueueThumbnailJob(video);
+}
 
 
   
@@ -390,24 +431,6 @@
 </script>
 
 <div class="video-editor">
-  <div class="editor-header">
-    <h2>Video Editor</h2>
-
-    <!-- FFmpeg Status Indicator -->
-    <div class="ffmpeg-status">
-      {#if ffmpegLoading}
-        <span class="status-loading">🔄 Loading FFmpeg...</span>
-      {:else if ffmpegLoaded}
-        <span class="status-ready">✅ FFmpeg Ready</span>
-      {:else}
-        <span class="status-error">❌ FFmpeg Failed</span>
-      {/if}
-    </div>
-  </div>
-
-  <!-- Audio sync handled by parent AudioTimeline -->
-
-  <!-- Controls Section -->
   <div class="controls-section">
     <div class="sync-status">
       <span class="status-label">Sync Status:</span>
@@ -417,17 +440,6 @@
       </span>
       <span class="play-status {isPlaying ? 'playing' : 'paused'}">
         {isPlaying ? '▶️ Playing' : '⏸️ Paused'}
-      </span>
-
-      <!-- FFmpeg Status -->
-      <span class="ffmpeg-status">
-        {#if ffmpegLoading}
-          🔄 FFmpeg Loading...
-        {:else if ffmpegLoaded}
-          ✅ FFmpeg Ready
-        {:else}
-          ⏳ FFmpeg Pending
-        {/if}
       </span>
     </div>
     
@@ -450,9 +462,6 @@
       on:click={handleVideoUpload}
     >
       📁 Batch Upload Videos
-      {#if ffmpegLoading}
-        <span class="loading-indicator">🔄</span>
-      {/if}
     </button>
     
     <!-- Reordering Mode Toggle -->
@@ -461,15 +470,6 @@
       on:click={toggleReorderingMode}
     >
       {isReorderingMode ? 'Exit Reorder Mode' : 'Reorder Mode'}
-    </button>
-
-    <!-- System Test Button -->
-    <button
-      class="btn secondary"
-      on:click={runSystemTest}
-      title="Run system diagnostics and log status to console"
-    >
-      🧪 Test System
     </button>
   </div>
   
@@ -484,12 +484,16 @@
   />
   
   <!-- Main Video Player -->
-  <VideoPlayer
-    currentVideo={currentVideo ? {...currentVideo, url: currentVideo ? getVideoUrl(currentVideo) : null} : null}
-    playing={isPlaying}
-    {savedPositions}
-    on:saveposition={handleVideoPositionSave}
-  />
+  <div style="width: 100%; max-width: 900px; margin: 0 auto;">
+  <div class="main-player-frame">
+    <VideoPlayer
+      currentVideo={currentVideo ? {...currentVideo, url: currentVideo ? getVideoUrl(currentVideo) : null} : null}
+      playing={isPlaying}
+      {savedPositions}
+      on:saveposition={handleVideoPositionSave}
+    />
+  </div>
+</div>
   
   <!-- Markers Display -->
   <Markers
@@ -501,8 +505,6 @@
 
   <!-- Video Grid -->
   <div class="video-grid-section">
-    <h3>Video Clips</h3>
-
     {#if videos.length === 0}
       <div class="empty-grid">
         <p>No video clips uploaded yet.</p>
@@ -540,40 +542,16 @@
           >
             <!-- Video thumbnail with FFmpeg support -->
             {#if video.processing}
-              <!-- Loading state while FFmpeg processes -->
-              <div class="thumbnail-loading">
-                <div class="loading-spinner"></div>
-                <span class="loading-text">Processing...</span>
-              </div>
-            {:else if video.thumbnailUrl}
-              <!-- FFmpeg-generated thumbnail -->
-              <img
-                src={video.thumbnailUrl}
-                alt="Thumbnail for {video.name}"
-                class="thumbnail-image"
-              />
-            {:else}
-              <!-- Fallback placeholder -->
-              <div class="thumbnail-placeholder">
-                <span>📹</span>
-                <span class="placeholder-text">{video.name.split('.')[0]}</span>
-              </div>
-            {/if}
-
-            <!-- Video info overlay -->
-            <div class="video-info">
-              <span class="video-name">{video.name}</span>
-              <span class="video-index">#{index + 1}</span>
-            </div>
-
-            <!-- Delete button (visible on hover) -->
-            <button
-              class="delete-btn"
-              on:click|stopPropagation={() => deleteVideo(index)}
-              aria-label="Delete video {video.name}"
-            >
-              ×
-            </button>
+  <!-- Loading state while FFmpeg processes -->
+  <div class="thumbnail-loading">
+    <div class="loading-spinner"></div>
+    <span class="loading-text">Processing...</span>
+  </div>
+{:else}
+  <div class="thumbnail-placeholder">
+    <span>📹</span>
+  </div>
+{/if}
 
             <!-- Current video indicator -->
             {#if currentVideoIndex === index}
@@ -603,16 +581,17 @@
   {#if showInsertionInterface}
     <div
       class="modal-overlay"
+      role="presentation"
       on:click={() => showInsertionInterface = false}
-      on:keydown={(e) => e.key === 'Escape' && (showInsertionInterface = false)}
-      role="dialog"
-      aria-modal="true"
-      aria-labelledby="modal-title"
     >
       <div
         class="insertion-modal"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="modal-title"
+        tabindex="0"
+        on:keydown={(e) => { if (e.key === 'Escape') showInsertionInterface = false; }}
         on:click|stopPropagation
-        on:keydown|stopPropagation
       >
         <h4 id="modal-title">Insert Video at Position {insertionIndex + 1}</h4>
         <p>Select video files to insert at this position:</p>
@@ -642,35 +621,6 @@
     padding: 20px;
     margin-top: 20px;
     color: #e6e6e6;
-  }
-  
-  .editor-header {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    margin-bottom: 20px;
-  }
-
-  .video-editor h2 {
-    margin: 0;
-    color: #00b8a9;
-    font-size: 20px;
-  }
-
-  .ffmpeg-status {
-    font-size: 12px;
-  }
-
-  .status-loading {
-    color: #e9b83c;
-  }
-
-  .status-ready {
-    color: #4ade80;
-  }
-
-  .status-error {
-    color: #ef4444;
   }
   
   .controls-section {
@@ -723,21 +673,6 @@
     color: #e9b83c;
   }
 
-  .ffmpeg-status {
-    font-size: 12px;
-    padding: 4px 8px;
-    border-radius: 4px;
-    font-weight: 500;
-    background-color: rgba(100, 100, 100, 0.2);
-    color: #ccc;
-  }
-
-  .loading-indicator {
-    margin-left: 8px;
-    font-size: 12px;
-    opacity: 0.7;
-  }
-  
   .markers-control {
     display: flex;
     flex-direction: column;
@@ -814,10 +749,10 @@
     margin-top: 30px;
   }
 
-  .video-grid-section h3 {
-    margin-bottom: 15px;
-    color: #e6e6e6;
-    font-size: 16px;
+  .video-grid {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 18px;
   }
 
   .empty-grid {
@@ -831,13 +766,6 @@
   .empty-grid p {
     margin: 5px 0;
     color: #a1a1aa;
-  }
-
-  .video-grid {
-    display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
-    gap: 15px;
-    padding: 10px 0;
   }
 
   .video-thumbnail {
@@ -862,12 +790,6 @@
     box-shadow: 0 0 0 2px rgba(0, 184, 169, 0.3);
   }
 
-  .thumbnail-image {
-    width: 100%;
-    height: 100%;
-    object-fit: cover;
-    pointer-events: none;
-  }
 
   .thumbnail-placeholder {
     width: 100%;
@@ -885,12 +807,6 @@
     margin-bottom: 5px;
   }
 
-  .placeholder-text {
-    font-size: 12px;
-    text-align: center;
-    padding: 0 8px;
-    word-break: break-word;
-  }
 
   .thumbnail-loading {
     width: 100%;
@@ -922,57 +838,11 @@
     100% { transform: rotate(360deg); }
   }
 
-  .video-info {
-    position: absolute;
-    bottom: 0;
-    left: 0;
-    right: 0;
-    background: linear-gradient(transparent, rgba(0, 0, 0, 0.8));
-    padding: 10px 8px 8px;
-    color: white;
-  }
 
-  .video-name {
-    display: block;
-    font-size: 12px;
-    font-weight: 500;
-    white-space: nowrap;
-    overflow: hidden;
-    text-overflow: ellipsis;
-  }
 
-  .video-index {
-    font-size: 10px;
-    opacity: 0.8;
-  }
 
-  .delete-btn {
-    position: absolute;
-    top: 8px;
-    right: 8px;
-    width: 24px;
-    height: 24px;
-    border-radius: 50%;
-    background-color: rgba(255, 0, 0, 0.8);
-    color: white;
-    border: none;
-    cursor: pointer;
-    font-size: 16px;
-    line-height: 1;
-    opacity: 0;
-    transition: opacity 0.2s ease;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-  }
 
-  .video-thumbnail:hover .delete-btn {
-    opacity: 1;
-  }
-
-  .delete-btn:hover {
-    background-color: rgba(255, 0, 0, 1);
-  }
+  
 
   .current-indicator {
     position: absolute;
@@ -1065,4 +935,15 @@
       gap: 15px;
     }
   }
+.main-player-frame {
+  width: 100%;
+  aspect-ratio: 16/9;
+  background: #111;
+  border-radius: 10px;
+  overflow: hidden;
+  position: relative;
+}
+
+/* Ensure the video element inside VideoPlayer fills and covers the frame */
+
 </style>
