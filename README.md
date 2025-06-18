@@ -1,107 +1,92 @@
-# This repo is no longer maintained. Consider using `npm init vite` and selecting the `svelte` option or — if you want a full-fledged app framework — use [SvelteKit](https://kit.svelte.dev), the official application framework for Svelte.
+# Swappy - Video Editing Application
 
----
+A transient-driven video editing application built with Svelte. Upload audio tracks, detect transients, and automatically switch between video clips based on waveform markers.
 
-# svelte app
+## Features
 
-This is a project template for [Svelte](https://svelte.dev) apps. It lives at https://github.com/sveltejs/template.
+- **Audio Analysis**: Load audio files and analyze waveforms with marker detection
+- **Video Management**: Upload multiple video clips with thumbnail grid display
+- **Marker-Based Switching**: Automatically switch videos based on detected markers
+- **Customizable Timing**: Adjust markers per shot (1-12 markers) with a slider
+- **Video Position Memory**: Resume videos from where they left off when cycling back
+- **Drag & Drop Reordering**: Rearrange video sequence in reordering mode
+- **Real-time Playback**: Synchronized audio and video playback
 
-To create a new project based on this template using [degit](https://github.com/Rich-Harris/degit):
+## Quick Start
 
-```bash
-npx degit sveltejs/template svelte-app
-cd svelte-app
-```
-
-*Note that you will need to have [Node.js](https://nodejs.org) installed.*
-
-
-## Get started
-
-Install the dependencies...
+Install dependencies:
 
 ```bash
-cd svelte-app
-npm install
+pnpm install
 ```
 
-...then start [Rollup](https://rollupjs.org):
+Start the development server:
 
 ```bash
-npm run dev
+pnpm run dev
 ```
 
-Navigate to [localhost:8080](http://localhost:8080). You should see your app running. Edit a component file in `src`, save it, and reload the page to see your changes.
+Open [http://localhost:5000](http://localhost:5000) in your browser.
 
-By default, the server will only respond to requests from localhost. To allow connections from other computers, edit the `sirv` commands in package.json to include the option `--host 0.0.0.0`.
+## How to Use
 
-If you're using [Visual Studio Code](https://code.visualstudio.com/) we recommend installing the official extension [Svelte for VS Code](https://marketplace.visualstudio.com/items?itemName=svelte.svelte-vscode). If you are using other editors you may need to install a plugin in order to get syntax highlighting and intellisense.
+1. **Upload Audio**: Click "Open Audio File" to load your music track
+2. **Detect Transients**: Use "Detect Transients" to analyze the waveform and create markers
+3. **Upload Videos**: Click "Batch Upload Videos" to add video clips
+4. **Set Marker Timing**: Use the "Markers per Shot" slider (1-12) to control video switching frequency
+5. **Play**: Hit the play button to start synchronized playback
+6. **Reorder Videos**: Toggle "Reorder Mode" to drag and drop video sequence
 
-## Building and running in production mode
+## Project Structure
 
-To create an optimised version of the app:
+```
+src/
+├── App.svelte              # Main application component
+├── AudioTimeline.svelte    # Audio waveform and analysis
+├── VideoEditor.svelte      # Video management and synchronization
+├── VideoPlayer.svelte      # Main video playback component
+├── Markers.svelte          # Marker visualization
+├── AudioFileManager.svelte # Audio file upload and management
+└── main.js                 # Application entry point
+```
+
+## Technology Stack
+
+- **Frontend**: Svelte 3
+- **Audio Processing**: WaveSurfer.js
+- **Build Tool**: Vite
+- **Package Manager**: pnpm
+
+## Building for Production
+
+Create an optimized build:
 
 ```bash
-npm run build
+pnpm run build
 ```
 
-You can run the newly built app with `npm run start`. This uses [sirv](https://github.com/lukeed/sirv), which is included in your package.json's `dependencies` so that the app will work when you deploy to platforms like [Heroku](https://heroku.com).
-
-
-## Single-page app mode
-
-By default, sirv will only respond to requests that match files in `public`. This is to maximise compatibility with static fileservers, allowing you to deploy your app anywhere.
-
-If you're building a single-page app (SPA) with multiple routes, sirv needs to be able to respond to requests for *any* path. You can make it so by editing the `"start"` command in package.json:
-
-```js
-"start": "sirv public --single"
-```
-
-## Using TypeScript
-
-This template comes with a script to set up a TypeScript development environment, you can run it immediately after cloning the template with:
+Serve the production build:
 
 ```bash
-node scripts/setupTypeScript.js
+pnpm run start
 ```
 
-Or remove the script via:
+## Development
 
-```bash
-rm scripts/setupTypeScript.js
-```
+The application uses:
+- **WaveSurfer.js** for audio waveform visualization and playback
+- **Beat detection** algorithms for automatic video switching
+- **Drag & drop** API for video reordering
+- **File API** for video and audio uploads
 
-If you want to use `baseUrl` or `path` aliases within your `tsconfig`, you need to set up `@rollup/plugin-alias` to tell Rollup to resolve the aliases. For more info, see [this StackOverflow question](https://stackoverflow.com/questions/63427935/setup-tsconfig-path-in-svelte).
+## Browser Support
 
-## Deploying to the web
+Modern browsers with support for:
+- Web Audio API
+- File API
+- HTML5 Video
+- ES6+ JavaScript features
 
-### With [Vercel](https://vercel.com)
+## License
 
-Install `vercel` if you haven't already:
-
-```bash
-npm install -g vercel
-```
-
-Then, from within your project folder:
-
-```bash
-cd public
-vercel deploy --name my-project
-```
-
-### With [surge](https://surge.sh/)
-
-Install `surge` if you haven't already:
-
-```bash
-npm install -g surge
-```
-
-Then, from within your project folder:
-
-```bash
-npm run build
-surge public my-project.surge.sh
-```
+MIT License

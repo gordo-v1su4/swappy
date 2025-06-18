@@ -1,0 +1,24 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset='utf-8'>
+  <meta name='viewport' content='width=device-width,initial-scale=1'>
+
+  <title>Audio Video Editor</title>
+
+  <link rel='icon' type='image/png' href='/favicon.png'>
+  <link rel='stylesheet' href='/global.css'>
+
+  <!-- Enable SharedArrayBuffer for FFmpeg -->
+  <script>
+    if (typeof SharedArrayBuffer === 'undefined') {
+      console.warn('SharedArrayBuffer is not available. FFmpeg may not work properly.');
+    }
+  </script>
+</head>
+
+<body>
+  <div id="app"></div>
+  <script type="module" src="/src/main.js"></script>
+</body>
+</html>

@@ -1,5 +1,7 @@
 <script>
   import { onMount, onDestroy, createEventDispatcher } from 'svelte';
+
+  const dispatch = createEventDispatcher();
   import WaveSurfer from 'wavesurfer.js';
   import RegionsPlugin from 'wavesurfer.js/dist/plugins/regions.esm.js';
   import TimelinePlugin from 'wavesurfer.js/dist/plugins/timeline.esm.js';
@@ -13,6 +15,7 @@
   export let progressColor = 'rgba(0, 184, 169, 0.7)';
   export let cursorColor = '#ccff00';
   export let cursorWidth = 2;
+  export let projectName = 'Untitled Project';
   
   // Local state
   let wavesurfer;
@@ -68,7 +71,6 @@
   const timelineId = `timeline-${Math.random().toString(36).substring(2, 9)}`;
   
   // Project title functionality from AudioEditor
-  let projectName = 'Untitled Project';
   let isEditingTitle = false;
   
   // Toggle project title editing
@@ -134,7 +136,10 @@
     wavesurfer.on('ready', () => {
       duration = wavesurfer.getDuration();
       isLoaded = true;
-      
+
+      // Dispatch duration change
+      dispatch('audiostate', { isPlaying, currentTime, duration });
+
       // Calculate the perfect zoom level to fit the entire track
       const containerWidth = container.clientWidth;
       if (containerWidth && duration) {
@@ -150,17 +155,24 @@
     
     wavesurfer.on('audioprocess', () => {
       currentTime = wavesurfer.getCurrentTime();
-      
+
+      // Dispatch time update
+      dispatch('audiostate', { isPlaying, currentTime, duration });
+
       // Check if we're hitting any transient markers
       checkTransientHit(currentTime);
     });
-    
+
     wavesurfer.on('play', () => {
       isPlaying = true;
+      // Dispatch play state
+      dispatch('audiostate', { isPlaying, currentTime, duration });
     });
-    
+
     wavesurfer.on('pause', () => {
       isPlaying = false;
+      // Dispatch pause state
+      dispatch('audiostate', { isPlaying, currentTime, duration });
     });
     
     wavesurfer.on('region-created', region => {

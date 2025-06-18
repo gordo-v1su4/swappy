@@ -213,12 +213,16 @@
     on:click={closeDialog}
     on:keydown={handleKeydown}
   >
-    <div 
-      class="dialog" 
-      on:click|stopPropagation={() => {}}
+    <div
+      class="dialog"
+      on:click|stopPropagation
+      on:keydown|stopPropagation
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="dialog-title"
     >
       <div class="dialog-header">
-        <h3 class="dialog-title">Export Region</h3>
+        <h3 id="dialog-title" class="dialog-title">Export Region</h3>
         <button class="close-button" on:click={closeDialog}>×</button>
       </div>
       

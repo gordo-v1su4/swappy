@@ -2,12 +2,24 @@
 import { onMount } from 'svelte';
 import AudioTimeline from './AudioTimeline.svelte';
 import AudioFileManager from './AudioFileManager.svelte';
+import VideoEditor from './VideoEditor.svelte';
 
 let selectedAudioUrl = null;
 let projectName = 'Untitled Project';
 
+// Audio state for video synchronization
+let audioState = {
+  isPlaying: false,
+  currentTime: 0,
+  duration: 0
+};
+
 function handleFileSelect(event) {
   selectedAudioUrl = event.detail.url;
+}
+
+function handleAudioState(event) {
+  audioState = event.detail;
 }
 
 onMount(() => {
@@ -72,20 +84,7 @@ onMount(() => {
     background-color: rgba(255, 255, 255, 0.1);
   }
   
-  .title-input {
-    background-color: #27272a;
-    border: 1px solid #3f3f46;
-    color: #e6e6e6;
-    font-size: 18px;
-    padding: 5px 10px;
-    border-radius: 4px;
-    width: 300px;
-  }
-  
-  .title-input:focus {
-    outline: none;
-    border-color: #00b8a9;
-  }
+
   
   .two-column {
     display: grid;
@@ -122,10 +121,23 @@ onMount(() => {
     </div>
     
     <div class="main-content">
-      <AudioTimeline 
-        audioUrl={selectedAudioUrl} 
+      <AudioTimeline
+        audioUrl={selectedAudioUrl}
         bind:projectName={projectName}
+        on:audiostate={handleAudioState}
       />
+
+      <!-- Video Editor Section -->
+      {#if selectedAudioUrl}
+        <VideoEditor
+          audioUrl={selectedAudioUrl}
+          isPlaying={audioState.isPlaying}
+          currentTime={audioState.currentTime}
+          duration={audioState.duration}
+        />
+      {/if}
     </div>
   </div>
 </div>
+
+
