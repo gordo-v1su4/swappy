@@ -6,9 +6,18 @@
   export let savedPositions = {};
   
   let videoElement;
+  let lastSavedPosition = -1;
+  let wasPlaying = false;
   const dispatch = createEventDispatcher();
   
   $: if (videoElement && currentVideo) {
+    if (videoElement.src !== currentVideo.url) {
+      console.log(' Swapping video to', currentVideo.url);
+      videoElement.src = currentVideo.url;
+      console.log(' Set src to', currentVideo.url);
+      videoElement.load();
+      console.log(' Called load() on video element');
+    }
     // If we have a saved position for this video, restore it
     if (savedPositions[currentVideo.id] !== undefined) {
       videoElement.currentTime = savedPositions[currentVideo.id];
@@ -18,12 +27,18 @@
   }
   
   $: if (videoElement && playing !== undefined) {
-    if (playing) {
+    if (playing && !wasPlaying) {
+      // Only play if we weren't already playing
       videoElement.play().catch(err => console.error('Video play error:', err));
-    } else {
+      wasPlaying = true;
+    } else if (!playing && wasPlaying) {
+      // Only pause and save position if we were actually playing
       videoElement.pause();
-      // Save current position when pausing
-      if (currentVideo) {
+      wasPlaying = false;
+      
+      // Save current position when pausing (only if position changed)
+      if (currentVideo && videoElement.currentTime !== lastSavedPosition) {
+        lastSavedPosition = videoElement.currentTime;
         dispatch('saveposition', { 
           id: currentVideo.id, 
           position: videoElement.currentTime 
@@ -65,12 +80,10 @@
 <style>
   .video-player {
     width: 100%;
-    height: 360px;
+    height: 100%;
     background-color: #121212;
     border-radius: 4px;
     overflow: hidden;
-    margin-top: 15px;
-    border: 1px solid #333;
     display: flex;
     align-items: center;
     justify-content: center;
@@ -79,7 +92,8 @@
   video {
     width: 100%;
     height: 100%;
-    object-fit: contain;
+    object-fit: cover;
+    display: block;
   }
   
   .no-video {
@@ -87,4 +101,3 @@
     font-size: 18px;
   }
 </style>
-

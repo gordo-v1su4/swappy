@@ -91,36 +91,40 @@ class FFmpegService {
 
   async generateThumbnail(videoFile, timeSeconds = 1) {
     await this.load();
-    
+    // Generate a unique id for this operation
+    const uniqueId = `thumb-${Date.now()}-${Math.random().toString(36).substring(2, 9)}`;
+    const inputFileName = `input-${uniqueId}.mp4`;
+    const outputFileName = `thumbnail-${uniqueId}.jpg`;
     try {
-      const inputFileName = 'input.mp4';
-      const outputFileName = 'thumbnail.jpg';
-      
       // Write video file to FFmpeg filesystem
       await this.ffmpeg.writeFile(inputFileName, await fetchFile(videoFile));
-      
-      // Generate thumbnail at specified time
+      // Generate thumbnail at specified time with proper single image output
       await this.ffmpeg.exec([
         '-i', inputFileName,
         '-ss', timeSeconds.toString(),
         '-vframes', '1',
         '-vf', 'scale=320:-1',
         '-q:v', '2',
+        '-update', '1',  // Force overwrite output file for single image
+        '-y',            // Overwrite output file without asking
         outputFileName
       ]);
-      
       // Read the generated thumbnail
       const data = await this.ffmpeg.readFile(outputFileName);
-      
       // Clean up
       await this.ffmpeg.deleteFile(inputFileName);
       await this.ffmpeg.deleteFile(outputFileName);
-      
       // Create blob URL from the thumbnail data
       const blob = new Blob([data.buffer], { type: 'image/jpeg' });
       return URL.createObjectURL(blob);
-      
     } catch (error) {
+      // Attempt cleanup on error as well
+      try {
+        await this.ffmpeg.deleteFile(inputFileName);
+      } catch {}
+      try {
+        await this.ffmpeg.deleteFile(outputFileName);
+      } catch {}
       console.error('Error generating thumbnail:', error);
       throw error;
     }
@@ -160,14 +164,12 @@ class FFmpegService {
 
   async extractAudio(videoFile) {
     await this.load();
-    
+    const uniqueId = `audio-${Date.now()}-${Math.random().toString(36).substring(2, 9)}`;
+    const inputFileName = `input-${uniqueId}.mp4`;
+    const outputFileName = `audio-${uniqueId}.wav`;
     try {
-      const inputFileName = 'input.mp4';
-      const outputFileName = 'audio.wav';
-      
       // Write video file to FFmpeg filesystem
       await this.ffmpeg.writeFile(inputFileName, await fetchFile(videoFile));
-      
       // Extract audio
       await this.ffmpeg.exec([
         '-i', inputFileName,
@@ -177,19 +179,17 @@ class FFmpegService {
         '-ac', '2',
         outputFileName
       ]);
-      
       // Read the extracted audio
       const data = await this.ffmpeg.readFile(outputFileName);
-      
       // Clean up
       await this.ffmpeg.deleteFile(inputFileName);
       await this.ffmpeg.deleteFile(outputFileName);
-      
       // Create blob URL from the audio data
       const blob = new Blob([data.buffer], { type: 'audio/wav' });
       return URL.createObjectURL(blob);
-      
     } catch (error) {
+      try { await this.ffmpeg.deleteFile(inputFileName); } catch {}
+      try { await this.ffmpeg.deleteFile(outputFileName); } catch {}
       console.error('Error extracting audio:', error);
       throw error;
     }
@@ -197,46 +197,37 @@ class FFmpegService {
 
   async convertVideo(videoFile, options = {}) {
     await this.load();
-    
+    const uniqueId = `conv-${Date.now()}-${Math.random().toString(36).substring(2, 9)}`;
+    const inputFileName = `input-${uniqueId}.mp4`;
+    const outputFileName = `output-${uniqueId}.mp4`;
     try {
-      const inputFileName = 'input.mp4';
-      const outputFileName = 'output.mp4';
-      
       // Write video file to FFmpeg filesystem
       await this.ffmpeg.writeFile(inputFileName, await fetchFile(videoFile));
-      
       // Build FFmpeg command based on options
       const command = ['-i', inputFileName];
-      
       if (options.scale) {
         command.push('-vf', `scale=${options.scale}`);
       }
-      
       if (options.fps) {
         command.push('-r', options.fps.toString());
       }
-      
       if (options.quality) {
         command.push('-crf', options.quality.toString());
       }
-      
       command.push(outputFileName);
-      
       // Execute conversion
       await this.ffmpeg.exec(command);
-      
       // Read the converted video
       const data = await this.ffmpeg.readFile(outputFileName);
-      
       // Clean up
       await this.ffmpeg.deleteFile(inputFileName);
       await this.ffmpeg.deleteFile(outputFileName);
-      
       // Create blob URL from the converted video
       const blob = new Blob([data.buffer], { type: 'video/mp4' });
       return URL.createObjectURL(blob);
-      
     } catch (error) {
+      try { await this.ffmpeg.deleteFile(inputFileName); } catch {}
+      try { await this.ffmpeg.deleteFile(outputFileName); } catch {}
       console.error('Error converting video:', error);
       throw error;
     }
@@ -250,6 +241,38 @@ class FFmpegService {
   // Set up log callback for debugging
   setLogCallback(callback) {
     this.ffmpeg.on('log', callback);
+  }
+
+  async getVideoInfo(videoFile) {
+    await this.load();
+    
+    try {
+      const inputFileName = 'input.mp4';
+      
+      // Write video file to FFmpeg filesystem
+      await this.ffmpeg.writeFile(inputFileName, await fetchFile(videoFile));
+      
+      // Get video information
+      await this.ffmpeg.exec([
+        '-i', inputFileName,
+        '-f', 'null', '-'
+      ]);
+      
+      // Clean up
+      await this.ffmpeg.deleteFile(inputFileName);
+      
+      // Note: In a real implementation, you'd parse the FFmpeg output
+      // to extract duration, resolution, etc. For now, we'll return basic info
+      return {
+        duration: 0, // Would be parsed from FFmpeg output
+        width: 0,
+        height: 0
+      };
+      
+    } catch (error) {
+      console.error('Error getting video info:', error);
+      throw error;
+    }
   }
 }
 
