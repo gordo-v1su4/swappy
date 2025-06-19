@@ -11,39 +11,118 @@
   const dispatch = createEventDispatcher();
   
   $: if (videoElement && currentVideo) {
-    if (videoElement.src !== currentVideo.url) {
-      console.log(' Swapping video to', currentVideo.url);
-      videoElement.src = currentVideo.url;
-      console.log(' Set src to', currentVideo.url);
-      videoElement.load();
-      console.log(' Called load() on video element');
-    }
-    // If we have a saved position for this video, restore it
-    if (savedPositions[currentVideo.id] !== undefined) {
-      videoElement.currentTime = savedPositions[currentVideo.id];
-    } else {
-      videoElement.currentTime = 0;
+    handleVideoChange(currentVideo);
+  }
+  
+  async function handleVideoChange(video) {
+    if (!videoElement || !video) return;
+    
+    try {
+      if (videoElement.src !== video.url) {
+        console.log('🔄 Swapping video to', video.url);
+        
+        // Pause current video to prevent race conditions
+        const wasCurrentlyPlaying = !videoElement.paused;
+        if (wasCurrentlyPlaying) {
+          videoElement.pause();
+        }
+        
+        // Set new source and wait for it to load
+        videoElement.src = video.url;
+        console.log('📝 Set src to', video.url);
+        
+        // Wait for video to be ready
+        await new Promise((resolve, reject) => {
+          const handleLoadedData = () => {
+            videoElement.removeEventListener('loadeddata', handleLoadedData);
+            videoElement.removeEventListener('error', handleError);
+            resolve();
+          };
+          
+          const handleError = (error) => {
+            videoElement.removeEventListener('loadeddata', handleLoadedData);
+            videoElement.removeEventListener('error', handleError);
+            reject(new Error(`Failed to load video: ${error.message || 'Unknown error'}`));
+          };
+          
+          videoElement.addEventListener('loadeddata', handleLoadedData);
+          videoElement.addEventListener('error', handleError);
+          videoElement.load();
+        });
+        
+        console.log('✅ Video loaded successfully');
+        
+        // Restore saved position after video is loaded
+        if (savedPositions[video.id] !== undefined) {
+          videoElement.currentTime = savedPositions[video.id];
+          console.log(`⏰ Restored position: ${savedPositions[video.id].toFixed(2)}s`);
+        } else {
+          videoElement.currentTime = 0;
+        }
+        
+        // Resume playback if it was playing before
+        if (wasCurrentlyPlaying && playing) {
+          await videoElement.play();
+        }
+      }
+    } catch (error) {
+      console.error('❌ Error during video change:', error);
+      // Dispatch error event for parent to handle
+      dispatch('videoerror', { error: error.message, video });
     }
   }
   
   $: if (videoElement && playing !== undefined) {
-    if (playing && !wasPlaying) {
-      // Only play if we weren't already playing
-      videoElement.play().catch(err => console.error('Video play error:', err));
-      wasPlaying = true;
-    } else if (!playing && wasPlaying) {
-      // Only pause and save position if we were actually playing
-      videoElement.pause();
-      wasPlaying = false;
-      
-      // Save current position when pausing (only if position changed)
-      if (currentVideo && videoElement.currentTime !== lastSavedPosition) {
-        lastSavedPosition = videoElement.currentTime;
-        dispatch('saveposition', { 
-          id: currentVideo.id, 
-          position: videoElement.currentTime 
-        });
+    handlePlayStateChange(playing);
+  }
+  
+  async function handlePlayStateChange(shouldPlay) {
+    if (!videoElement || !currentVideo) return;
+    
+    try {
+      if (shouldPlay && !wasPlaying) {
+        // Validate video is ready before playing
+        if (videoElement.readyState >= 2) { // HAVE_CURRENT_DATA
+          await videoElement.play();
+          wasPlaying = true;
+          console.log('▶️ Video playback started');
+        } else {
+          console.warn('⚠️ Video not ready for playback, waiting...');
+          // Wait for video to be ready
+          await new Promise((resolve) => {
+            const handleCanPlay = () => {
+              videoElement.removeEventListener('canplay', handleCanPlay);
+              resolve();
+            };
+            videoElement.addEventListener('canplay', handleCanPlay);
+          });
+          await videoElement.play();
+          wasPlaying = true;
+          console.log('▶️ Video playback started (after waiting)');
+        }
+      } else if (!shouldPlay && wasPlaying) {
+        // Pause and save position
+        videoElement.pause();
+        wasPlaying = false;
+        console.log('⏸️ Video playback paused');
+        
+        // Save current position when pausing (only if position changed significantly)
+        if (currentVideo && Math.abs(videoElement.currentTime - lastSavedPosition) > 0.1) {
+          lastSavedPosition = videoElement.currentTime;
+          dispatch('saveposition', {
+            id: currentVideo.id,
+            position: videoElement.currentTime
+          });
+          console.log(`💾 Position saved: ${videoElement.currentTime.toFixed(2)}s`);
+        }
       }
+    } catch (error) {
+      console.error('❌ Error during play state change:', error);
+      wasPlaying = false;
+      dispatch('videoerror', {
+        error: `Playback error: ${error.message}`,
+        video: currentVideo
+      });
     }
   }
   
@@ -60,6 +139,11 @@
       videoElement.src = currentVideo.url;
     }
   });
+  
+  // Export method to get current video time
+  export function getCurrentTime() {
+    return videoElement ? videoElement.currentTime : null;
+  }
 </script>
 
 <div class="video-player">

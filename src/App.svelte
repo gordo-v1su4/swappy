@@ -14,12 +14,39 @@ let audioState = {
   duration: 0
 };
 
+// Audio markers from AudioTimeline
+let audioMarkers = [];
+let audioTimelineComponent;
+
 function handleFileSelect(event) {
   selectedAudioUrl = event.detail.url;
 }
 
 function handleAudioState(event) {
   audioState = event.detail;
+}
+
+// Function to get markers from AudioTimeline
+function updateAudioMarkers() {
+  if (audioTimelineComponent) {
+    try {
+      // Get transient markers from AudioTimeline
+      const transientMarkers = audioTimelineComponent.getTransientMarkers?.() || [];
+      const userMarkers = audioTimelineComponent.getUserMarkers?.() || [];
+      
+      // Combine all markers
+      audioMarkers = [...transientMarkers, ...userMarkers];
+      console.log(`🎯 Updated audio markers: ${audioMarkers.length} total`);
+    } catch (error) {
+      console.warn('⚠️ Could not get markers from AudioTimeline:', error);
+      audioMarkers = [];
+    }
+  }
+}
+
+// Update markers periodically when audio is loaded
+$: if (selectedAudioUrl && audioTimelineComponent) {
+  updateAudioMarkers();
 }
 
 onMount(() => {
@@ -122,9 +149,11 @@ onMount(() => {
     
     <div class="main-content">
       <AudioTimeline
+        bind:this={audioTimelineComponent}
         audioUrl={selectedAudioUrl}
         bind:projectName={projectName}
         on:audiostate={handleAudioState}
+        on:markersupdate={updateAudioMarkers}
       />
 
       <!-- Video Editor Section -->
@@ -134,6 +163,7 @@ onMount(() => {
           isPlaying={audioState.isPlaying}
           currentTime={audioState.currentTime}
           duration={audioState.duration}
+          audioMarkers={audioMarkers}
         />
       {/if}
     </div>

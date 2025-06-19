@@ -13,11 +13,13 @@
   let currentVideoIndex = 0;
   let currentVideo = null;
   let savedPositions = {};
+  let videoPlayerComponent;
   
   // Audio synchronization - these will be passed from parent
   export let isPlaying = false;
   export let currentTime = 0;
   export let duration = 0;
+  export let audioMarkers = []; // Real markers from AudioTimeline
   let markers = [];
   let markersPerShot = 4; // Default value from task list
   let lastMarkerIndex = -1;
@@ -92,59 +94,134 @@
   
   // Audio sync is handled by parent AudioTimeline component
   
-  // Placeholder function to load markers from external source
+  // Load markers from AudioTimeline component
   function loadMarkers() {
-    // In a real implementation, this would load from various sources
-    // For now, generate some sample markers for testing
-    markers = [
-      0.5, 1.0, 1.5, 2.0, 2.5, 3.0, 3.5, 4.0, 4.5, 5.0,
-      5.5, 6.0, 6.5, 7.0, 7.5, 8.0, 8.5, 9.0, 9.5, 10.0
-    ];
+    // Use real markers from AudioTimeline if available, otherwise use fallback
+    if (audioMarkers && audioMarkers.length > 0) {
+      // Extract time positions from marker objects
+      markers = audioMarkers.map(marker => {
+        // Handle different marker formats
+        if (typeof marker === 'number') {
+          return marker;
+        } else if (marker.start !== undefined) {
+          return marker.start;
+        } else if (marker.time !== undefined) {
+          return marker.time;
+        }
+        return 0;
+      }).filter(time => time > 0).sort((a, b) => a - b);
+      
+      console.log(`🎯 Loaded ${markers.length} real audio markers:`, markers.slice(0, 10));
+    } else {
+      // Fallback to sample markers for testing when no real markers available
+      markers = [
+        0.5, 1.0, 1.5, 2.0, 2.5, 3.0, 3.5, 4.0, 4.5, 5.0,
+        5.5, 6.0, 6.5, 7.0, 7.5, 8.0, 8.5, 9.0, 9.5, 10.0
+      ];
+      console.log('🎯 Using fallback sample markers for testing');
+    }
+  }
+  
+  // Watch for changes in audioMarkers and reload
+  $: if (audioMarkers) {
+    loadMarkers();
   }
   
   function checkMarkerSwitching(time) {
-    // Find the current marker index
-    const currentMarkerIndex = markers.findIndex(marker => marker > time) - 1;
+    // State validation
+    if (!isPlaying || markers.length === 0 || videos.length <= 1) {
+      return;
+    }
+    
+    if (typeof time !== 'number' || time < 0) {
+      console.warn('⚠️ Invalid time for marker switching:', time);
+      return;
+    }
 
-    if (currentMarkerIndex !== lastMarkerIndex && currentMarkerIndex >= 0) {
-      markerCount++;
-      lastMarkerIndex = currentMarkerIndex;
+    try {
+      // Find the current marker index
+      const currentMarkerIndex = markers.findIndex(marker => marker > time) - 1;
 
-      console.log(`🎯 Marker hit #${markerCount} at ${time.toFixed(2)}s (marker index: ${currentMarkerIndex})`);
+      if (currentMarkerIndex !== lastMarkerIndex && currentMarkerIndex >= 0) {
+        markerCount++;
+        lastMarkerIndex = currentMarkerIndex;
 
-      // Switch video every markersPerShot markers
-      if (markerCount >= markersPerShot && videos.length > 1) {
-        console.log(`🔄 Switching video after ${markersPerShot} markers`);
-        switchToNextVideo();
-        markerCount = 0;
+        console.log(`🎯 Marker hit #${markerCount} at ${time.toFixed(2)}s (marker index: ${currentMarkerIndex})`);
+
+        // Switch video every markersPerShot markers
+        if (markerCount >= markersPerShot) {
+          console.log(`🔄 Attempting to switch video after ${markersPerShot} markers`);
+          const switchSuccess = switchToNextVideo();
+          if (switchSuccess) {
+            markerCount = 0;
+          } else {
+            console.warn('⚠️ Video switch failed, keeping marker count');
+          }
+        }
       }
+    } catch (error) {
+      console.error('❌ Error during marker switching:', error);
     }
   }
   
   function switchToNextVideo() {
+    // State validation
     if (videos.length === 0) {
       console.warn('⚠️ Cannot switch video - no videos loaded');
-      return;
+      return false;
+    }
+    
+    if (videos.length === 1) {
+      console.log('ℹ️ Only one video available, no switching needed');
+      return false;
     }
 
-    const previousIndex = currentVideoIndex;
-    const previousVideo = currentVideo;
+    try {
+      const previousIndex = currentVideoIndex;
+      const previousVideo = currentVideo;
 
-    // Save current video position
-    if (currentVideo) {
-      savedPositions[currentVideo.id] = currentTime;
-      console.log(`💾 Saved position ${currentTime.toFixed(2)}s for video: ${currentVideo.name}`);
-    }
+      // Validate current video state
+      if (!currentVideo) {
+        console.warn('⚠️ No current video to switch from');
+        currentVideoIndex = 0;
+        return true;
+      }
 
-    // Move to next video in sequence
-    currentVideoIndex = (currentVideoIndex + 1) % videos.length;
-    const newVideo = videos[currentVideoIndex];
+      // Save current video position from the actual video element
+      if (videoPlayerComponent) {
+        try {
+          const videoCurrentTime = videoPlayerComponent.getCurrentTime();
+          if (videoCurrentTime !== null && videoCurrentTime >= 0) {
+            savedPositions[currentVideo.id] = videoCurrentTime;
+            console.log(`💾 Saved video position ${videoCurrentTime.toFixed(2)}s for video: ${currentVideo.name}`);
+          }
+        } catch (error) {
+          console.warn('⚠️ Could not save video position:', error.message);
+        }
+      }
 
-    console.log(`🎬 Switched from video ${previousIndex + 1} (${previousVideo?.name || 'none'}) to video ${currentVideoIndex + 1} (${newVideo?.name || 'none'})`);
+      // Move to next video in sequence
+      const nextIndex = (currentVideoIndex + 1) % videos.length;
+      const nextVideo = videos[nextIndex];
+      
+      // Validate next video
+      if (!nextVideo || !nextVideo.url) {
+        console.error('❌ Next video is invalid:', nextVideo);
+        return false;
+      }
 
-    // Log if we have a saved position for the new video
-    if (newVideo && savedPositions[newVideo.id] !== undefined) {
-      console.log(`⏰ Will resume video from saved position: ${savedPositions[newVideo.id].toFixed(2)}s`);
+      currentVideoIndex = nextIndex;
+      console.log(`🎬 Switched from video ${previousIndex + 1} (${previousVideo?.name || 'none'}) to video ${currentVideoIndex + 1} (${nextVideo?.name || 'none'})`);
+
+      // Log if we have a saved position for the new video
+      if (savedPositions[nextVideo.id] !== undefined) {
+        console.log(`⏰ Will resume video from saved position: ${savedPositions[nextVideo.id].toFixed(2)}s`);
+      }
+      
+      return true;
+    } catch (error) {
+      console.error('❌ Error during video switching:', error);
+      return false;
     }
   }
   
@@ -395,9 +472,31 @@ function generateThumbnailInBackground(video) {
   }
   
   function handleVideoPositionSave(event) {
-    const { id, position } = event.detail;
-    savedPositions[id] = position;
-    console.log(`💾 Video position saved: ${position.toFixed(2)}s for video ID: ${id}`);
+    try {
+      const { id, position } = event.detail;
+      
+      // Validate input
+      if (!id || typeof position !== 'number' || position < 0) {
+        console.warn('⚠️ Invalid position save data:', { id, position });
+        return;
+      }
+      
+      savedPositions[id] = position;
+      console.log(`💾 Video position saved: ${position.toFixed(2)}s for video ID: ${id}`);
+    } catch (error) {
+      console.error('❌ Error saving video position:', error);
+    }
+  }
+  
+  // Handle video errors from VideoPlayer
+  function handleVideoError(event) {
+    const { error, video } = event.detail;
+    console.error(`❌ Video error for ${video?.name || 'unknown video'}:`, error);
+    
+    // Could implement recovery strategies here:
+    // - Try to reload the video
+    // - Skip to next video
+    // - Show user notification
   }
 
   // Test function to verify everything is working
@@ -487,10 +586,12 @@ function generateThumbnailInBackground(video) {
   <div style="width: 100%; max-width: 900px; margin: 0 auto;">
   <div class="main-player-frame">
     <VideoPlayer
+      bind:this={videoPlayerComponent}
       currentVideo={currentVideo ? {...currentVideo, url: currentVideo ? getVideoUrl(currentVideo) : null} : null}
       playing={isPlaying}
       {savedPositions}
       on:saveposition={handleVideoPositionSave}
+      on:videoerror={handleVideoError}
     />
   </div>
 </div>
@@ -542,16 +643,25 @@ function generateThumbnailInBackground(video) {
           >
             <!-- Video thumbnail with FFmpeg support -->
             {#if video.processing}
-  <!-- Loading state while FFmpeg processes -->
-  <div class="thumbnail-loading">
-    <div class="loading-spinner"></div>
-    <span class="loading-text">Processing...</span>
-  </div>
-{:else}
-  <div class="thumbnail-placeholder">
-    <span>📹</span>
-  </div>
-{/if}
+              <!-- Loading state while FFmpeg processes -->
+              <div class="thumbnail-loading">
+                <div class="loading-spinner"></div>
+                <span class="loading-text">Processing...</span>
+              </div>
+            {:else if video.thumbnailUrl}
+              <!-- Show actual thumbnail -->
+              <img
+                src={video.thumbnailUrl}
+                alt="Thumbnail for {video.name}"
+                class="thumbnail-image"
+              />
+            {:else}
+              <!-- Placeholder when no thumbnail available -->
+              <div class="thumbnail-placeholder">
+                <span>📹</span>
+                <div class="video-name">{video.name}</div>
+              </div>
+            {/if}
 
             <!-- Current video indicator -->
             {#if currentVideoIndex === index}
@@ -805,6 +915,20 @@ function generateThumbnailInBackground(video) {
   .thumbnail-placeholder span:first-child {
     font-size: 24px;
     margin-bottom: 5px;
+  }
+  
+  .video-name {
+    font-size: 10px;
+    text-align: center;
+    margin-top: 5px;
+    opacity: 0.7;
+  }
+
+  .thumbnail-image {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    display: block;
   }
 
 

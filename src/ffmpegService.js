@@ -42,15 +42,15 @@ class FFmpegService {
         // Strategy 2: JSDelivr CDN
         async () => {
           console.log('🔄 Trying JSDelivr CDN...');
-          const coreURL = await toBlobURL('https://cdn.jsdelivr.net/npm/@ffmpeg/core@0.12.6/dist/umd/ffmpeg-core.js', 'text/javascript');
-          const wasmURL = await toBlobURL('https://cdn.jsdelivr.net/npm/@ffmpeg/core@0.12.6/dist/umd/ffmpeg-core.wasm', 'application/wasm');
+          const coreURL = await toBlobURL('https://cdn.jsdelivr.net/npm/@ffmpeg/core@0.12.15/dist/umd/ffmpeg-core.js', 'text/javascript');
+          const wasmURL = await toBlobURL('https://cdn.jsdelivr.net/npm/@ffmpeg/core@0.12.15/dist/umd/ffmpeg-core.wasm', 'application/wasm');
           await this.ffmpeg.load({ coreURL, wasmURL });
         },
         // Strategy 3: UNPKG CDN
         async () => {
           console.log('🔄 Trying UNPKG CDN...');
-          const coreURL = await toBlobURL('https://unpkg.com/@ffmpeg/core@0.12.6/dist/umd/ffmpeg-core.js', 'text/javascript');
-          const wasmURL = await toBlobURL('https://unpkg.com/@ffmpeg/core@0.12.6/dist/umd/ffmpeg-core.wasm', 'application/wasm');
+          const coreURL = await toBlobURL('https://unpkg.com/@ffmpeg/core@0.12.15/dist/umd/ffmpeg-core.js', 'text/javascript');
+          const wasmURL = await toBlobURL('https://unpkg.com/@ffmpeg/core@0.12.15/dist/umd/ffmpeg-core.wasm', 'application/wasm');
           await this.ffmpeg.load({ coreURL, wasmURL });
         }
       ];
@@ -243,37 +243,6 @@ class FFmpegService {
     this.ffmpeg.on('log', callback);
   }
 
-  async getVideoInfo(videoFile) {
-    await this.load();
-    
-    try {
-      const inputFileName = 'input.mp4';
-      
-      // Write video file to FFmpeg filesystem
-      await this.ffmpeg.writeFile(inputFileName, await fetchFile(videoFile));
-      
-      // Get video information
-      await this.ffmpeg.exec([
-        '-i', inputFileName,
-        '-f', 'null', '-'
-      ]);
-      
-      // Clean up
-      await this.ffmpeg.deleteFile(inputFileName);
-      
-      // Note: In a real implementation, you'd parse the FFmpeg output
-      // to extract duration, resolution, etc. For now, we'll return basic info
-      return {
-        duration: 0, // Would be parsed from FFmpeg output
-        width: 0,
-        height: 0
-      };
-      
-    } catch (error) {
-      console.error('Error getting video info:', error);
-      throw error;
-    }
-  }
 }
 
 // Create a singleton instance

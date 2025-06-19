@@ -895,6 +895,31 @@
       }, 150); // Light stays on for 150ms
     }
   }
+  
+  // Export methods to get markers for VideoEditor
+  export function getTransientMarkers() {
+    return transientMarkers.map(marker => ({
+      start: marker.start,
+      type: 'transient',
+      data: marker.data
+    }));
+  }
+  
+  export function getUserMarkers() {
+    return markers.map(marker => ({
+      start: marker.start,
+      type: 'user',
+      data: marker.data
+    }));
+  }
+  
+  // Dispatch markers update event when markers change
+  $: if (transientMarkers.length > 0 || markers.length > 0) {
+    dispatch('markersupdate', {
+      transientMarkers: getTransientMarkers(),
+      userMarkers: getUserMarkers()
+    });
+  }
 </script>
 
 <style>
