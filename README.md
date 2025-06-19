@@ -1,92 +1,144 @@
-# Swappy - Video Editing Application
+# Swappy - Audio/Video Editor
 
-A transient-driven video editing application built with Svelte. Upload audio tracks, detect transients, and automatically switch between video clips based on waveform markers.
+A modern web-based audio/video editor built with SvelteKit and Rust.
 
-## Features
+## Prerequisites
 
-- **Audio Analysis**: Load audio files and analyze waveforms with marker detection
-- **Video Management**: Upload multiple video clips with thumbnail grid display
-- **Marker-Based Switching**: Automatically switch videos based on detected markers
-- **Customizable Timing**: Adjust markers per shot (1-12 markers) with a slider
-- **Video Position Memory**: Resume videos from where they left off when cycling back
-- **Drag & Drop Reordering**: Rearrange video sequence in reordering mode
-- **Real-time Playback**: Synchronized audio and video playback
+- Node.js >= 18.13.0 (Required by SvelteKit)
+- pnpm >= 8.0.0
+- Rust >= 1.75.0
+- Modern browser with:
+  - Web Audio API support
+  - WebAssembly support
+  - HTML5 Video support
 
 ## Quick Start
 
-Install dependencies:
+1. **Install Node.js 18.13.0 or later**
+   ```bash
+   # Using nvm (recommended)
+   nvm install 18.13.0
+   nvm use 18.13.0
+   
+   # Verify installation
+   node --version
+   ```
 
-```bash
-pnpm install
-```
+2. **Install pnpm**
+   ```bash
+   npm install -g pnpm
+   ```
 
-Start the development server:
+3. **Install Dependencies**
+   ```bash
+   # Install frontend dependencies
+   cd frontend
+   pnpm install
+   
+   # Install backend dependencies
+   cd ../backend
+   cargo build
+   ```
 
-```bash
-pnpm run dev
-```
+4. **Start Development Servers**
+   ```bash
+   # Terminal 1: Start frontend
+   cd frontend
+   pnpm run dev
+   
+   # Terminal 2: Start backend
+   cd backend
+   cargo run
+   ```
 
-Open [http://localhost:5000](http://localhost:5000) in your browser.
+5. **Access the Application**
+   - Frontend: http://localhost:5173
+   - Backend API: http://localhost:3000
 
-## How to Use
+## Features
 
-1. **Upload Audio**: Click "Open Audio File" to load your music track
-2. **Detect Transients**: Use "Detect Transients" to analyze the waveform and create markers
-3. **Upload Videos**: Click "Batch Upload Videos" to add video clips
-4. **Set Marker Timing**: Use the "Markers per Shot" slider (1-12) to control video switching frequency
-5. **Play**: Hit the play button to start synchronized playback
-6. **Reorder Videos**: Toggle "Reorder Mode" to drag and drop video sequence
+- **Audio Processing**
+  - Waveform visualization with WaveSurfer.js
+  - Transient detection for precise audio analysis
+  - Real-time audio manipulation
+  - Volume control and audio extraction
+
+- **Video Processing**
+  - Client-side video processing with FFmpeg.wasm
+  - Frame-accurate seeking
+  - Thumbnail generation
+  - HLS support for smooth playback
+
+- **Modern UI**
+  - Dark theme
+  - Responsive design
+  - Drag-and-drop file upload
+  - Intuitive controls
 
 ## Project Structure
 
 ```
-src/
-├── App.svelte              # Main application component
-├── AudioTimeline.svelte    # Audio waveform and analysis
-├── VideoEditor.svelte      # Video management and synchronization
-├── VideoPlayer.svelte      # Main video playback component
-├── Markers.svelte          # Marker visualization
-├── AudioFileManager.svelte # Audio file upload and management
-└── main.js                 # Application entry point
-```
-
-## Technology Stack
-
-- **Frontend**: Svelte 3
-- **Audio Processing**: WaveSurfer.js
-- **Build Tool**: Vite
-- **Package Manager**: pnpm
-
-## Building for Production
-
-Create an optimized build:
-
-```bash
-pnpm run build
-```
-
-Serve the production build:
-
-```bash
-pnpm run start
+swappy/
+├── frontend/                # SvelteKit frontend application
+│   ├── src/
+│   │   ├── lib/            # Library code
+│   │   │   ├── components/ # Reusable components
+│   │   │   └── services/   # Shared services
+│   │   ├── routes/         # Page components
+│   │   ├── app.html       # App template
+│   │   └── app.css        # Global styles
+│   └── static/            # Static assets
+└── backend/               # Rust backend service
+    ├── src/
+    │   ├── api/          # API endpoints
+    │   ├── models/       # Data models
+    │   ├── services/     # Business logic
+    │   └── utils/        # Helper functions
+    └── uploads/          # File storage
 ```
 
 ## Development
 
-The application uses:
-- **WaveSurfer.js** for audio waveform visualization and playback
-- **Beat detection** algorithms for automatic video switching
-- **Drag & drop** API for video reordering
-- **File API** for video and audio uploads
+### Frontend Development
 
-## Browser Support
+The frontend is built with:
+- SvelteKit 2.0
+- Svelte 5.0 (with runes)
+- Vite 5.0
+- TypeScript
+- WaveSurfer.js for audio visualization
+- FFmpeg.wasm for video processing
+- HLS.js for video playback
 
-Modern browsers with support for:
-- Web Audio API
-- File API
-- HTML5 Video
-- ES6+ JavaScript features
+### Backend Development
+
+The backend is built with:
+- Rust
+- Actix-web for the HTTP server
+- SQLite for data storage
+- FFmpeg for server-side video processing
+
+## Troubleshooting
+
+### Common Issues
+
+1. **Node.js Version Error**
+   ```
+   ERR_PNPM_UNSUPPORTED_ENGINE Unsupported environment
+   ```
+   Solution: Install Node.js 18.13.0 or later using nvm
+
+2. **Port Already in Use**
+   ```
+   error: Address already in use
+   ```
+   Solution: Kill the process using the port:
+   ```bash
+   sudo lsof -i :5173  # For frontend
+   sudo lsof -i :3000  # For backend
+   kill -9 <PID>
+   ```
 
 ## License
 
-MIT License
+MIT License - See LICENSE file for details

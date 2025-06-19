@@ -1,5 +1,42 @@
-/node_modules/
-/public/build/
-/dist/
+# Dependencies
+node_modules/
+**/node_modules/
+**/target/
 
+# Build outputs
+**/dist/
+**/build/
+
+# Environment variables
+.env
+.env.local
+.env.*.local
+
+# IDE and editor files
+.idea/
+.vscode/
+*.swp
+*.swo
 .DS_Store
+
+# Debug logs
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+debug.log
+
+# Media files
+backend/uploads/**/*.mp4
+backend/uploads/**/*.wav
+backend/uploads/**/*.mp3
+backend/uploads/**/*.jpg
+backend/uploads/**/*.png
+
+# Test coverage
+coverage/
+.nyc_output/
+
+# Temporary files
+*.tmp
+*.temp
+.cache/
