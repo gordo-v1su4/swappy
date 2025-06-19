@@ -1,29 +1,52 @@
 {
-  "name": "swappy",
-  "version": "1.0.0",
-  "description": "Video editing application with Svelte frontend and Rust backend",
-  "private": true,
-  "workspaces": [
-    "frontend"
-  ],
-  "scripts": {
-    "dev": "concurrently \"pnpm run dev:frontend\" \"pnpm run dev:backend\"",
-    "dev:frontend": "cd frontend && pnpm run dev",
-    "dev:backend": "cd backend && cargo run",
-    "build": "pnpm run build:frontend && pnpm run build:backend",
-    "build:frontend": "cd frontend && pnpm run build",
-    "build:backend": "cd backend && cargo build --release",
-    "test": "pnpm run test:frontend && pnpm run test:backend",
-    "test:frontend": "cd frontend && pnpm test",
-    "test:backend": "cd backend && cargo test"
-  },
-  "devDependencies": {
-    "concurrently": "^9.1.2"
-  },
-  "packageManager": "pnpm@8.15.4",
-  "pnpm": {
-    "onlyBuiltDependencies": [
-      "esbuild"
-    ]
-  }
+	"name": "swappy",
+	"private": true,
+	"version": "0.0.1",
+	"type": "module",
+	"packageManager": "pnpm@10.12.1",
+	"scripts": {
+		"dev": "vite dev",
+		"build": "vite build",
+		"preview": "vite preview",
+		"prepare": "svelte-kit sync || echo ''",
+		"check": "svelte-kit sync && svelte-check --tsconfig ./jsconfig.json",
+		"check:watch": "svelte-kit sync && svelte-check --tsconfig ./jsconfig.json --watch"
+	},
+	"devDependencies": {
+		"@internationalized/date": "^3.8.2",
+		"@lucide/svelte": "^0.518.0",
+		"@sveltejs/adapter-auto": "^6.0.0",
+		"@sveltejs/kit": "^2.16.0",
+		"@sveltejs/vite-plugin-svelte": "^5.0.0",
+		"@tailwindcss/typography": "^0.5.16",
+		"autoprefixer": "^10.4.21",
+		"bits-ui": "^2.8.3",
+		"clsx": "^2.1.1",
+		"lucide-svelte": "^0.518.0",
+		"mode-watcher": "^1.0.8",
+		"postcss": "^8.4.35",
+		"postcss-import": "^16.1.1",
+		"postcss-load-config": "^6.0.1",
+		"postcss-nesting": "^13.0.2",
+		"svelte": "^5.0.0",
+		"svelte-check": "^4.0.0",
+		"tailwind-merge": "^3.3.1",
+		"tailwind-variants": "^1.0.0",
+		"tailwindcss": "^3.4.1",
+		"tailwindcss-animate": "^1.0.7",
+		"tw-animate-css": "^1.3.4",
+		"typescript": "^5.0.0",
+		"vite": "^6.2.6",
+		"vite-plugin-devtools-json": "^0.2.0"
+	},
+	"pnpm": {
+		"onlyBuiltDependencies": [
+			"esbuild"
+		]
+	},
+	"dependencies": {
+		"@ffmpeg/ffmpeg": "^0.12.15",
+		"@ffmpeg/util": "^0.12.2",
+		"wavesurfer.js": "^7.9.5"
+	}
 }

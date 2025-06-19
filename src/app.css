@@ -1,0 +1,138 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    --background: 0 0% 100%;
+    --foreground: 240 5.9% 10%;
+    --card: 0 0% 100%;
+    --card-foreground: 240 5.9% 10%;
+    --popover: 0 0% 100%;
+    --popover-foreground: 240 5.9% 10%;
+    --primary: 240 5.9% 10%;
+    --primary-foreground: 0 0% 98%;
+    --secondary: 240 4.8% 95.9%;
+    --secondary-foreground: 240 5.9% 10%;
+    --muted: 240 4.8% 95.9%;
+    --muted-foreground: 240 3.8% 46.1%;
+    --accent: 240 4.8% 95.9%;
+    --accent-foreground: 240 5.9% 10%;
+    --destructive: 0 84.2% 60.2%;
+    --destructive-foreground: 0 0% 98%;
+    --border: 240 5.9% 90%;
+    --input: 240 5.9% 90%;
+    --ring: 240 5.9% 10%;
+    --radius: 0.5rem;
+  }
+ 
+  .dark {
+    --background: 240 5.9% 10%;
+    --foreground: 0 0% 98%;
+    --card: 240 5.9% 10%;
+    --card-foreground: 0 0% 98%;
+    --popover: 240 5.9% 10%;
+    --popover-foreground: 0 0% 98%;
+    --primary: 0 0% 98%;
+    --primary-foreground: 240 5.9% 10%;
+    --secondary: 240 3.7% 15.9%;
+    --secondary-foreground: 0 0% 98%;
+    --muted: 240 3.7% 15.9%;
+    --muted-foreground: 240 5% 64.9%;
+    --accent: 240 3.7% 15.9%;
+    --accent-foreground: 0 0% 98%;
+    --destructive: 0 62.8% 30.6%;
+    --destructive-foreground: 0 0% 98%;
+    --border: 240 3.7% 15.9%;
+    --input: 240 3.7% 15.9%;
+    --ring: 240 4.9% 83.9%;
+  }
+}
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+  body {
+    @apply bg-[#111827] text-primary antialiased;
+  }
+}
+
+@layer components {
+  .btn {
+    @apply px-4 py-2 rounded-md font-medium transition-all bg-[#1F2937] hover:bg-[#374151] text-white backdrop-blur-sm;
+  }
+
+  .btn-primary {
+    @apply bg-[#2DD4BF] hover:bg-[#14B8A6] text-[#111827];
+  }
+
+  .btn-outline {
+    @apply border border-[#2DD4BF] text-[#2DD4BF] hover:bg-[#2DD4BF] hover:text-[#111827] bg-transparent;
+  }
+
+  .btn-disabled {
+    @apply bg-[#374151] text-[#9CA3AF] cursor-not-allowed hover:bg-[#374151];
+  }
+
+  .slider-container {
+    @apply relative w-full;
+  }
+
+  .slider {
+    @apply w-full h-1.5 bg-[#374151] rounded-full appearance-none cursor-pointer;
+  }
+
+  .slider::-webkit-slider-thumb {
+    @apply w-3 h-3 rounded-full bg-white appearance-none hover:bg-[#2DD4BF] transition-colors;
+  }
+
+  .slider::-moz-range-thumb {
+    @apply w-3 h-3 rounded-full bg-white border-none hover:bg-[#2DD4BF] transition-colors;
+  }
+
+  .slider-value {
+    @apply absolute right-0 top-0 text-sm text-[#9CA3AF];
+  }
+
+  .waveform-container {
+    @apply w-full h-32 bg-[#1F2937] rounded-md overflow-hidden relative;
+  }
+
+  .waveform {
+    @apply absolute inset-0;
+    background: linear-gradient(180deg, rgba(45, 212, 191, 0.2) 0%, rgba(45, 212, 191, 0.1) 100%);
+  }
+
+  .waveform-path {
+    @apply stroke-[#2DD4BF] stroke-[1.5];
+  }
+
+  .beat-marker {
+    @apply absolute top-0 h-full w-px bg-white/10;
+  }
+
+  .time-marker {
+    @apply absolute bottom-0 text-xs text-[#9CA3AF];
+  }
+
+  .video-preview {
+    @apply w-full aspect-video bg-black rounded-md mt-4;
+  }
+
+  .thumbnail-grid {
+    @apply grid grid-cols-4 gap-2 mt-4;
+  }
+
+  .thumbnail {
+    @apply aspect-video rounded-sm overflow-hidden bg-[#1F2937];
+  }
+
+  .notification {
+    @apply fixed bottom-4 left-1/2 -translate-x-1/2 px-4 py-2 rounded-md bg-[#1F2937] text-white;
+  }
+
+  .notification-error {
+    @apply bg-[#EF4444];
+  }
+}

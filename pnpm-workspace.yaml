@@ -1,4 +1,0 @@
-packages:
-  - 'frontend'
-  # Exclude the backend directory since it's managed by Cargo
-  - '!backend' 

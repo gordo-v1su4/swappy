@@ -1,12 +1,11 @@
 # Swappy - Audio/Video Editor
 
-A modern web-based audio/video editor built with SvelteKit and Rust.
+A modern web-based audio/video editor built with SvelteKit and WebAssembly.
 
 ## Prerequisites
 
 - Node.js >= 18.13.0 (Required by SvelteKit)
 - pnpm >= 8.0.0
-- Rust >= 1.75.0
 - Modern browser with:
   - Web Audio API support
   - WebAssembly support
@@ -31,29 +30,16 @@ A modern web-based audio/video editor built with SvelteKit and Rust.
 
 3. **Install Dependencies**
    ```bash
-   # Install frontend dependencies
-   cd frontend
    pnpm install
-   
-   # Install backend dependencies
-   cd ../backend
-   cargo build
    ```
 
-4. **Start Development Servers**
+4. **Start Development Server**
    ```bash
-   # Terminal 1: Start frontend
-   cd frontend
-   pnpm run dev
-   
-   # Terminal 2: Start backend
-   cd backend
-   cargo run
+   pnpm dev
    ```
 
 5. **Access the Application**
-   - Frontend: http://localhost:5173
-   - Backend API: http://localhost:3000
+   - Open http://localhost:5173 in your browser
 
 ## Features
 
@@ -79,29 +65,22 @@ A modern web-based audio/video editor built with SvelteKit and Rust.
 
 ```
 swappy/
-├── frontend/                # SvelteKit frontend application
-│   ├── src/
-│   │   ├── lib/            # Library code
-│   │   │   ├── components/ # Reusable components
-│   │   │   └── services/   # Shared services
-│   │   ├── routes/         # Page components
-│   │   ├── app.html       # App template
-│   │   └── app.css        # Global styles
-│   └── static/            # Static assets
-└── backend/               # Rust backend service
-    ├── src/
-    │   ├── api/          # API endpoints
-    │   ├── models/       # Data models
-    │   ├── services/     # Business logic
-    │   └── utils/        # Helper functions
-    └── uploads/          # File storage
+├── src/                # Source code
+│   ├── lib/           # Library code
+│   │   ├── components/ # Reusable components
+│   │   │   ├── audio/  # Audio-related components
+│   │   │   └── video/  # Video-related components
+│   │   └── services/   # Shared services
+│   ├── routes/        # Page components
+│   ├── app.html      # App template
+│   └── app.css       # Global styles
+├── static/           # Static assets
+└── tests/           # Test files
 ```
 
-## Development
+## Technology Stack
 
-### Frontend Development
-
-The frontend is built with:
+The application is built with:
 - SvelteKit 2.0
 - Svelte 5.0 (with runes)
 - Vite 5.0
@@ -110,13 +89,31 @@ The frontend is built with:
 - FFmpeg.wasm for video processing
 - HLS.js for video playback
 
-### Backend Development
+## Development Plan
 
-The backend is built with:
-- Rust
-- Actix-web for the HTTP server
-- SQLite for data storage
-- FFmpeg for server-side video processing
+### Phase 1: Core Infrastructure
+- [x] Project setup with SvelteKit and Vite
+- [x] Implementation of Svelte 5 runes
+- [ ] WASM module integration
+- [ ] File handling system
+
+### Phase 2: Video Processing
+- [ ] Client-side video processing with FFmpeg.wasm
+- [ ] Video player component
+- [ ] Thumbnail generation
+- [ ] Frame extraction
+
+### Phase 3: Audio Processing
+- [ ] Audio visualization
+- [ ] Waveform display
+- [ ] Transient detection
+- [ ] Volume control
+
+### Phase 4: UI/UX
+- [ ] Dark theme implementation
+- [ ] Responsive layout
+- [ ] Drag-and-drop interface
+- [ ] Progress indicators
 
 ## Troubleshooting
 
@@ -134,10 +131,15 @@ The backend is built with:
    ```
    Solution: Kill the process using the port:
    ```bash
-   sudo lsof -i :5173  # For frontend
-   sudo lsof -i :3000  # For backend
+   sudo lsof -i :5173
    kill -9 <PID>
    ```
+
+3. **WASM Loading Issues**
+   If you encounter issues with WASM modules:
+   - Check if your browser supports WebAssembly
+   - Ensure you're using HTTPS in production
+   - Clear browser cache and reload
 
 ## License
 

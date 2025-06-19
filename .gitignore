@@ -1,42 +1,23 @@
-# Dependencies
-node_modules/
-**/node_modules/
-**/target/
+node_modules
 
-# Build outputs
-**/dist/
-**/build/
+# Output
+.output
+.vercel
+.netlify
+.wrangler
+/.svelte-kit
+/build
 
-# Environment variables
-.env
-.env.local
-.env.*.local
-
-# IDE and editor files
-.idea/
-.vscode/
-*.swp
-*.swo
+# OS
 .DS_Store
+Thumbs.db
 
-# Debug logs
-npm-debug.log*
-yarn-debug.log*
-yarn-error.log*
-debug.log
+# Env
+.env
+.env.*
+!.env.example
+!.env.test
 
-# Media files
-backend/uploads/**/*.mp4
-backend/uploads/**/*.wav
-backend/uploads/**/*.mp3
-backend/uploads/**/*.jpg
-backend/uploads/**/*.png
-
-# Test coverage
-coverage/
-.nyc_output/
-
-# Temporary files
-*.tmp
-*.temp
-.cache/
+# Vite
+vite.config.js.timestamp-*
+vite.config.ts.timestamp-*
