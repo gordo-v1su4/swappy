@@ -24,6 +24,8 @@
   let markersPerShot = 4; // Default value from task list
   let lastMarkerIndex = -1;
   let markerCount = 0;
+  let lastSwitchTime = 0; // Throttle switching
+  let minSwitchInterval = 500; // Minimum 500ms between switches
   
   // UI state
   let isReorderingMode = false;
@@ -88,8 +90,17 @@
   // No need to load audio - we sync with parent AudioTimeline
   
   // Watch for audio time changes and handle marker-driven switching
-  $: if (isPlaying && markers.length > 0) {
+  $: if (isPlaying && markers.length > 0 && videos.length > 1) {
     checkMarkerSwitching(currentTime);
+  }
+  
+  // Also watch for currentVideoIndex changes to update the active video
+  $: if (videos.length > 0 && currentVideoIndex >= 0 && currentVideoIndex < videos.length) {
+    const newVideo = videos[currentVideoIndex];
+    console.log(`🎬 Current video index changed to: ${currentVideoIndex} (${newVideo?.name})`);
+    
+    // Force update the currentVideo reactive variable
+    currentVideo = newVideo;
   }
   
   // Audio sync is handled by parent AudioTimeline component
@@ -116,14 +127,20 @@
       // Fallback to sample markers for testing when no real markers available
       markers = [
         0.5, 1.0, 1.5, 2.0, 2.5, 3.0, 3.5, 4.0, 4.5, 5.0,
-        5.5, 6.0, 6.5, 7.0, 7.5, 8.0, 8.5, 9.0, 9.5, 10.0
+        5.5, 6.0, 6.5, 7.0, 7.5, 8.0, 8.5, 9.0, 9.5, 10.0,
+        10.5, 11.0, 11.5, 12.0, 12.5, 13.0, 13.5, 14.0, 14.5, 15.0
       ];
-      console.log('🎯 Using fallback sample markers for testing');
+      console.log(`🎯 Using fallback sample markers for testing (${markers.length} markers)`);
     }
+    
+    // Reset marker counting when markers change
+    lastMarkerIndex = -1;
+    markerCount = 0;
+    console.log(`🔄 Reset marker counting - markersPerShot: ${markersPerShot}`);
   }
   
   // Watch for changes in audioMarkers and reload
-  $: if (audioMarkers) {
+  $: if (audioMarkers !== undefined) {
     loadMarkers();
   }
   
@@ -146,17 +163,27 @@
         markerCount++;
         lastMarkerIndex = currentMarkerIndex;
 
-        console.log(`🎯 Marker hit #${markerCount} at ${time.toFixed(2)}s (marker index: ${currentMarkerIndex})`);
+        console.log(`🎯 Marker hit #${markerCount} at ${time.toFixed(2)}s (marker index: ${currentMarkerIndex}) - markersPerShot: ${markersPerShot}`);
 
-        // Switch video every markersPerShot markers
+        // Switch video every markersPerShot markers (with throttling)
         if (markerCount >= markersPerShot) {
-          console.log(`🔄 Attempting to switch video after ${markersPerShot} markers`);
-          const switchSuccess = switchToNextVideo();
-          if (switchSuccess) {
-            markerCount = 0;
+          const now = Date.now();
+          if (now - lastSwitchTime >= minSwitchInterval) {
+            console.log(`🔄 TRIGGERING VIDEO SWITCH after ${markersPerShot} markers`);
+            const previousIndex = currentVideoIndex;
+            const switchSuccess = switchToNextVideo();
+            if (switchSuccess) {
+              markerCount = 0;
+              lastSwitchTime = now;
+              console.log(`✅ Video switched from ${previousIndex} to ${currentVideoIndex}`);
+            } else {
+              console.warn('⚠️ Video switch failed, keeping marker count');
+            }
           } else {
-            console.warn('⚠️ Video switch failed, keeping marker count');
+            console.log(`⏳ Throttling switch - waiting ${minSwitchInterval - (now - lastSwitchTime)}ms`);
           }
+        } else {
+          console.log(`⏳ Waiting for ${markersPerShot - markerCount} more markers before switching`);
         }
       }
     } catch (error) {
@@ -253,15 +280,15 @@
           file: file,
           thumbnailUrl: null,
           loaded: true, // Mark as loaded immediately
-          processing: false // No processing needed for basic playback
+          processing: false // No processing animation needed
         };
 
         // Add video to list immediately - ready for playback
         videos = [...videos, video];
         console.log(`✅ Video ready for playback: ${video.name}`);
 
-        // Generate thumbnail in background (optional, non-blocking)
-        generateThumbnailInBackground(video);
+        // Skip thumbnail generation - not needed for basic functionality
+        // generateThumbnailInBackground(video);
       } else {
         console.warn(`⚠️ Skipping non-video file: ${file.name} (${file.type})`);
       }
@@ -283,15 +310,23 @@ function enqueueThumbnailJob(video) {
 
 async function processThumbnailQueue() {
   if (thumbnailProcessing || thumbnailQueue.length === 0) return;
+  
+  console.log(`🔄 Processing thumbnail queue: ${thumbnailQueue.length} items remaining`);
   thumbnailProcessing = true;
   const video = thumbnailQueue.shift();
+  
   try {
     await generateThumbnailSerial(video);
+  } catch (error) {
+    console.error(`❌ Thumbnail queue processing failed for ${video?.name}:`, error);
   } finally {
     thumbnailProcessing = false;
     // Process next job
     if (thumbnailQueue.length > 0) {
-      processThumbnailQueue();
+      console.log(`⏭️ Processing next thumbnail in queue`);
+      setTimeout(() => processThumbnailQueue(), 100); // Small delay between processing
+    } else {
+      console.log(`✅ Thumbnail queue processing complete`);
     }
   }
 }
@@ -342,6 +377,7 @@ async function generateThumbnailSerial(video) {
 function generateThumbnailInBackground(video) {
   // Mark as processing
   videos = videos.map(v => v.id === video.id ? { ...v, processing: true } : v);
+  console.log(`🖼️ Starting thumbnail generation for: ${video.name}`);
   enqueueThumbnailJob(video);
 }
 
@@ -587,7 +623,7 @@ function generateThumbnailInBackground(video) {
   <div class="main-player-frame">
     <VideoPlayer
       bind:this={videoPlayerComponent}
-      currentVideo={currentVideo ? {...currentVideo, url: currentVideo ? getVideoUrl(currentVideo) : null} : null}
+      currentVideo={currentVideo}
       playing={isPlaying}
       {savedPositions}
       on:saveposition={handleVideoPositionSave}
@@ -654,12 +690,14 @@ function generateThumbnailInBackground(video) {
                 src={video.thumbnailUrl}
                 alt="Thumbnail for {video.name}"
                 class="thumbnail-image"
+                on:load={() => console.log(`✅ Thumbnail loaded for ${video.name}`)}
+                on:error={() => console.error(`❌ Thumbnail failed to load for ${video.name}`)}
               />
             {:else}
               <!-- Placeholder when no thumbnail available -->
               <div class="thumbnail-placeholder">
                 <span>📹</span>
-                <div class="video-name">{video.name}</div>
+                <div class="video-name">{video.name.length > 15 ? video.name.substring(0, 15) + '...' : video.name}</div>
               </div>
             {/if}
 

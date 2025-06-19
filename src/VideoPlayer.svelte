@@ -15,11 +15,19 @@
   }
   
   async function handleVideoChange(video) {
-    if (!videoElement || !video) return;
+    if (!videoElement || !video || !video.url) {
+      console.warn('⚠️ Invalid video or video element for change:', { video, videoElement });
+      return;
+    }
     
     try {
-      if (videoElement.src !== video.url) {
-        console.log('🔄 Swapping video to', video.url);
+      // Always check if we need to change the video source
+      const currentSrc = videoElement.src;
+      const newSrc = video.url;
+      
+      // Compare the actual URLs, handling blob URLs properly
+      if (currentSrc !== newSrc) {
+        console.log('🔄 Swapping video from', currentSrc, 'to', newSrc);
         
         // Pause current video to prevent race conditions
         const wasCurrentlyPlaying = !videoElement.paused;
@@ -28,18 +36,26 @@
         }
         
         // Set new source and wait for it to load
-        videoElement.src = video.url;
-        console.log('📝 Set src to', video.url);
+        videoElement.src = newSrc;
+        console.log('📝 Set src to', newSrc);
         
         // Wait for video to be ready
         await new Promise((resolve, reject) => {
+          const timeout = setTimeout(() => {
+            videoElement.removeEventListener('loadeddata', handleLoadedData);
+            videoElement.removeEventListener('error', handleError);
+            reject(new Error('Video load timeout'));
+          }, 10000); // 10 second timeout
+          
           const handleLoadedData = () => {
+            clearTimeout(timeout);
             videoElement.removeEventListener('loadeddata', handleLoadedData);
             videoElement.removeEventListener('error', handleError);
             resolve();
           };
           
           const handleError = (error) => {
+            clearTimeout(timeout);
             videoElement.removeEventListener('loadeddata', handleLoadedData);
             videoElement.removeEventListener('error', handleError);
             reject(new Error(`Failed to load video: ${error.message || 'Unknown error'}`));
@@ -50,7 +66,7 @@
           videoElement.load();
         });
         
-        console.log('✅ Video loaded successfully');
+        console.log('✅ Video loaded successfully:', video.name);
         
         // Restore saved position after video is loaded
         if (savedPositions[video.id] !== undefined) {
@@ -64,6 +80,8 @@
         if (wasCurrentlyPlaying && playing) {
           await videoElement.play();
         }
+      } else {
+        console.log('ℹ️ Video source unchanged, skipping reload');
       }
     } catch (error) {
       console.error('❌ Error during video change:', error);
