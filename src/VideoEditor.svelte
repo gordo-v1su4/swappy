@@ -15,6 +15,11 @@
   let savedPositions = {};
   let videoPlayerComponent;
   
+  // Video preloading for seamless switching
+  let preloadedVideos = new Map(); // Map of video IDs to preloaded video elements
+  let preloadQueue = [];
+  const MAX_PRELOADED = 3; // Maximum number of videos to keep preloaded
+  
   // Audio synchronization - these will be passed from parent
   export let isPlaying = false;
   export let currentTime = 0;
@@ -85,6 +90,14 @@
         URL.revokeObjectURL(video.url);
       }
     });
+    
+    // Clean up preloaded videos
+    for (const [videoId, videoEl] of preloadedVideos.entries()) {
+      if (videoEl.parentNode) {
+        videoEl.parentNode.removeChild(videoEl);
+      }
+    }
+    preloadedVideos.clear();
   });
   
   // No need to load audio - we sync with parent AudioTimeline
@@ -232,8 +245,18 @@
       const nextVideo = videos[nextIndex];
       
       // Validate next video
-      if (!nextVideo || !nextVideo.url) {
+      if (!nextVideo || !nextVideo.url || !nextVideo.file) {
         console.error('❌ Next video is invalid:', nextVideo);
+        // Try to find a valid video
+        for (let i = 0; i < videos.length; i++) {
+          const testVideo = videos[i];
+          if (testVideo && testVideo.url && testVideo.file) {
+            currentVideoIndex = i;
+            console.log(`🔄 Found valid video at index ${i}: ${testVideo.name}`);
+            return true;
+          }
+        }
+        console.error('❌ No valid videos found');
         return false;
       }
 
@@ -280,15 +303,15 @@
           file: file,
           thumbnailUrl: null,
           loaded: true, // Mark as loaded immediately
-          processing: false // No processing animation needed
+          processing: false // Don't show processing animation initially
         };
 
         // Add video to list immediately - ready for playback
         videos = [...videos, video];
         console.log(`✅ Video ready for playback: ${video.name}`);
 
-        // Skip thumbnail generation - not needed for basic functionality
-        // generateThumbnailInBackground(video);
+        // Generate thumbnail using HTML5 video + canvas (more reliable)
+        setTimeout(() => generateSimpleThumbnail(video), 100);
       } else {
         console.warn(`⚠️ Skipping non-video file: ${file.name} (${file.type})`);
       }
@@ -335,11 +358,13 @@ async function processThumbnailQueue() {
 async function generateThumbnailSerial(video) {
   try {
     console.log(`🖼️ [QUEUE] Starting thumbnail generation for: ${video.name} (ID: ${video.id})`);
+    
     // Initialize FFmpeg only when we need thumbnails
     if (!ffmpegLoaded && !ffmpegLoading) {
       console.log('🔄 Initializing FFmpeg for thumbnail generation...');
       await initializeFFmpeg();
     }
+    
     // Wait for FFmpeg if it's loading
     if (ffmpegLoading) {
       console.log('⏳ Waiting for FFmpeg to load for thumbnail generation...');
@@ -347,29 +372,119 @@ async function generateThumbnailSerial(video) {
         await new Promise(resolve => setTimeout(resolve, 100));
       }
     }
+    
     if (!ffmpegLoaded) {
       console.warn('⚠️ FFmpeg not available, skipping thumbnail generation');
+      // Mark as not processing but keep video name visible
+      videos = videos.map(v => v.id === video.id ? { ...v, processing: false } : v);
       return;
     }
+    
     console.log(`🖼️ FFmpeg ready, generating thumbnail for: ${video.name}`);
-    const thumbnailUrl = await ffmpegService.generateThumbnail(video.file, 1);
-    console.log(`✅ Thumbnail URL generated:`, thumbnailUrl);
-    // Update video with thumbnail
-    const updatedVideos = videos.map(v =>
+    
+    // Generate thumbnail at 1 second mark
+    const thumbnailUrl = await ffmpegService.generateThumbnail(video.file, 1.0);
+    console.log(`✅ Thumbnail generated successfully for ${video.name}:`, thumbnailUrl);
+    
+    // Update video with thumbnail - force reactivity
+    videos = videos.map(v =>
       v.id === video.id
         ? { ...v, thumbnailUrl, processing: false, loaded: true }
         : v
     );
-    console.log(`🔄 Updating video ${video.id} with thumbnail URL`);
-    videos = updatedVideos;
-    // Log the updated video object to verify
-    const updatedVideo = videos.find(v => v.id === video.id);
-    console.log(`📝 Updated video object:`, updatedVideo);
+    
+    console.log(`🔄 Updated video ${video.id} with thumbnail`);
+    
   } catch (error) {
     console.error(`❌ Thumbnail generation failed for ${video.name}:`, error);
-    console.error('Error stack:', error.stack);
-    // Mark as loaded even if thumbnail generation failed
-    videos = videos.map(v => v.id === video.id ? { ...v, loaded: true, processing: false } : v);
+    console.error('Error details:', error.message);
+    
+    // Mark as not processing but keep video name visible
+    videos = videos.map(v => v.id === video.id ? { ...v, processing: false, loaded: true } : v);
+  }
+}
+
+// Simple thumbnail generation using HTML5 video and canvas
+function generateSimpleThumbnail(video) {
+  try {
+    console.log(`🖼️ Generating simple thumbnail for: ${video.name}`);
+    
+    // Mark as processing
+    videos = videos.map(v => v.id === video.id ? { ...v, processing: true } : v);
+    
+    // Create a hidden video element
+    const videoEl = document.createElement('video');
+    videoEl.crossOrigin = 'anonymous';
+    videoEl.muted = true;
+    videoEl.style.display = 'none';
+    document.body.appendChild(videoEl);
+    
+    videoEl.onloadeddata = () => {
+      try {
+        // Seek to 1 second
+        videoEl.currentTime = 1.0;
+      } catch (error) {
+        console.warn('Could not seek to 1 second, using current frame');
+        generateThumbnailFromCurrentFrame();
+      }
+    };
+    
+    videoEl.onseeked = generateThumbnailFromCurrentFrame;
+    videoEl.onerror = () => {
+      console.error(`❌ Video load error for ${video.name}`);
+      cleanup();
+      // Mark as not processing, show video name
+      videos = videos.map(v => v.id === video.id ? { ...v, processing: false } : v);
+    };
+    
+    function generateThumbnailFromCurrentFrame() {
+      try {
+        // Create canvas
+        const canvas = document.createElement('canvas');
+        const ctx = canvas.getContext('2d');
+        
+        // Set canvas size
+        canvas.width = 320;
+        canvas.height = (videoEl.videoHeight / videoEl.videoWidth) * 320;
+        
+        // Draw video frame to canvas
+        ctx.drawImage(videoEl, 0, 0, canvas.width, canvas.height);
+        
+        // Convert to blob URL
+        canvas.toBlob((blob) => {
+          const thumbnailUrl = URL.createObjectURL(blob);
+          console.log(`✅ Simple thumbnail generated for ${video.name}`);
+          
+          // Update video with thumbnail
+          videos = videos.map(v =>
+            v.id === video.id
+              ? { ...v, thumbnailUrl, processing: false, loaded: true }
+              : v
+          );
+          
+          cleanup();
+        }, 'image/jpeg', 0.8);
+        
+      } catch (error) {
+        console.error(`❌ Canvas thumbnail generation failed for ${video.name}:`, error);
+        cleanup();
+        videos = videos.map(v => v.id === video.id ? { ...v, processing: false } : v);
+      }
+    }
+    
+    function cleanup() {
+      if (videoEl.parentNode) {
+        videoEl.parentNode.removeChild(videoEl);
+      }
+    }
+    
+    // Load the video
+    videoEl.src = video.url;
+    videoEl.load();
+    
+  } catch (error) {
+    console.error(`❌ Simple thumbnail generation failed for ${video.name}:`, error);
+    videos = videos.map(v => v.id === video.id ? { ...v, processing: false } : v);
   }
 }
 
@@ -378,9 +493,186 @@ function generateThumbnailInBackground(video) {
   // Mark as processing
   videos = videos.map(v => v.id === video.id ? { ...v, processing: true } : v);
   console.log(`🖼️ Starting thumbnail generation for: ${video.name}`);
-  enqueueThumbnailJob(video);
+  
+  // Try direct generation first, fallback to queue if needed
+  generateThumbnailDirect(video);
 }
 
+// Direct thumbnail generation (simpler approach)
+async function generateThumbnailDirect(video) {
+  try {
+    console.log(`🖼️ [DIRECT] Starting thumbnail generation for: ${video.name}`);
+    
+    // Initialize FFmpeg if needed
+    if (!ffmpegLoaded && !ffmpegLoading) {
+      console.log('🔄 Initializing FFmpeg for thumbnail generation...');
+      await initializeFFmpeg();
+    }
+    
+    // Wait for FFmpeg if it's loading
+    while (ffmpegLoading) {
+      await new Promise(resolve => setTimeout(resolve, 100));
+    }
+    
+    if (!ffmpegLoaded) {
+      console.warn('⚠️ FFmpeg not available, showing video name only');
+      videos = videos.map(v => v.id === video.id ? { ...v, processing: false } : v);
+      return;
+    }
+    
+    console.log(`🖼️ Generating thumbnail for: ${video.name}`);
+    const thumbnailUrl = await ffmpegService.generateThumbnail(video.file, 1.0);
+    console.log(`✅ Thumbnail generated: ${thumbnailUrl}`);
+    
+    // Update video with thumbnail
+    videos = videos.map(v =>
+      v.id === video.id
+        ? { ...v, thumbnailUrl, processing: false, loaded: true }
+        : v
+    );
+    
+    console.log(`🔄 Updated video ${video.name} with thumbnail`);
+    
+  } catch (error) {
+    console.error(`❌ Direct thumbnail generation failed for ${video.name}:`, error);
+    
+    // Mark as not processing, show video name
+    videos = videos.map(v => v.id === video.id ? { ...v, processing: false } : v);
+  }
+}
+
+// Video preloading system for seamless switching
+function preloadNextVideos() {
+  if (videos.length <= 1) return;
+  
+  // Clear old preloaded videos that are no longer needed
+  cleanupPreloadedVideos();
+  
+  // Determine which videos to preload (next 2-3 videos in sequence)
+  const videosToPreload = [];
+  for (let i = 1; i <= MAX_PRELOADED && i < videos.length; i++) {
+    const nextIndex = (currentVideoIndex + i) % videos.length;
+    const nextVideo = videos[nextIndex];
+    if (nextVideo && !preloadedVideos.has(nextVideo.id)) {
+      videosToPreload.push(nextVideo);
+    }
+  }
+  
+  // Preload each video
+  videosToPreload.forEach(video => {
+    preloadVideo(video);
+  });
+}
+
+function preloadVideo(video) {
+  if (!video || !video.url || preloadedVideos.has(video.id)) return;
+  
+  console.log(`🔄 Preloading video: ${video.name}`);
+  
+  const videoEl = document.createElement('video');
+  videoEl.src = video.url;
+  videoEl.muted = true;
+  videoEl.preload = 'auto';
+  videoEl.style.display = 'none';
+  videoEl.style.position = 'absolute';
+  videoEl.style.top = '-9999px';
+  
+  // Enhanced preloading - ensure video is fully ready
+  const preloadPromise = new Promise((resolve, reject) => {
+    const timeout = setTimeout(() => {
+      console.warn(`⚠️ Preload timeout for ${video.name}`);
+      cleanup();
+      resolve(); // Don't reject, just resolve to prevent blocking
+    }, 3000); // Further reduced timeout to 3s
+    
+    const handleLoadedData = () => {
+      clearTimeout(timeout);
+      console.log(`✅ Video preloaded: ${video.name} (readyState: ${videoEl.readyState})`);
+      
+      // Restore saved position if available
+      if (savedPositions[video.id] !== undefined) {
+        videoEl.currentTime = savedPositions[video.id];
+        console.log(`⏰ Preload restored position: ${savedPositions[video.id].toFixed(2)}s`);
+      }
+      
+      preloadedVideos.set(video.id, videoEl);
+      cleanup();
+      resolve();
+    };
+    
+    const handleError = (error) => {
+      clearTimeout(timeout);
+      console.error(`❌ Failed to preload video ${video.name}:`, error);
+      cleanup();
+      reject(error);
+    };
+    
+    const cleanup = () => {
+      videoEl.removeEventListener('loadeddata', handleLoadedData);
+      videoEl.removeEventListener('error', handleError);
+      videoEl.removeEventListener('canplaythrough', handleLoadedData);
+    };
+    
+    videoEl.addEventListener('loadeddata', handleLoadedData);
+    videoEl.addEventListener('canplaythrough', handleLoadedData);
+    videoEl.addEventListener('error', handleError);
+  });
+  
+  // Add to DOM temporarily to trigger loading
+  document.body.appendChild(videoEl);
+  videoEl.load();
+  
+  // Clean up DOM element after preloading (keep video element in memory)
+  preloadPromise.finally(() => {
+    if (videoEl.parentNode) {
+      videoEl.parentNode.removeChild(videoEl);
+    }
+  });
+}
+
+function cleanupPreloadedVideos() {
+  // Remove preloaded videos that are too far from current position
+  const videosToKeep = new Set();
+  
+  // Keep current video and next few videos
+  for (let i = 0; i <= MAX_PRELOADED && i < videos.length; i++) {
+    const keepIndex = (currentVideoIndex + i) % videos.length;
+    const keepVideo = videos[keepIndex];
+    if (keepVideo) {
+      videosToKeep.add(keepVideo.id);
+    }
+  }
+  
+  // Remove videos not in keep set
+  for (const [videoId, videoEl] of preloadedVideos.entries()) {
+    if (!videosToKeep.has(videoId)) {
+      console.log(`🧹 Cleaning up preloaded video: ${videoId}`);
+      // Clean up video element resources
+      if (videoEl) {
+        videoEl.src = '';
+        videoEl.load(); // This helps free up memory
+        if (videoEl.parentNode) {
+          videoEl.parentNode.removeChild(videoEl);
+        }
+      }
+      preloadedVideos.delete(videoId);
+    }
+  }
+}
+
+function getPreloadedVideo(videoId) {
+  const preloadedVideo = preloadedVideos.get(videoId);
+  if (preloadedVideo) {
+    console.log(`🎯 Found preloaded video for ${videoId}, readyState: ${preloadedVideo.readyState}`);
+  }
+  return preloadedVideo;
+}
+
+// Watch for video index changes to trigger preloading
+// TEMPORARILY DISABLED - preloading is causing timeouts and blocking playback
+// $: if (currentVideoIndex >= 0 && videos.length > 1) {
+//   preloadNextVideos();
+// }
 
   
   // Video grid management
@@ -626,6 +918,7 @@ function generateThumbnailInBackground(video) {
       currentVideo={currentVideo}
       playing={isPlaying}
       {savedPositions}
+      {getPreloadedVideo}
       on:saveposition={handleVideoPositionSave}
       on:videoerror={handleVideoError}
     />
@@ -665,16 +958,14 @@ function generateThumbnailInBackground(video) {
           {/if}
 
           <!-- Video Thumbnail -->
-          <div
+          <button
             class="video-thumbnail {currentVideoIndex === index ? 'active' : ''}"
             draggable={isReorderingMode}
             on:dragstart={(e) => handleDragStart(e, index)}
             on:dragover={handleDragOver}
             on:drop={(e) => handleDrop(e, index)}
             on:click={() => !isReorderingMode && (currentVideoIndex = index)}
-            on:keydown={(e) => e.key === 'Enter' && !isReorderingMode && (currentVideoIndex = index)}
-            tabindex="0"
-            role="button"
+            disabled={isReorderingMode}
             aria-label="Video clip {index + 1}: {video.name}"
           >
             <!-- Video thumbnail with FFmpeg support -->
@@ -705,20 +996,17 @@ function generateThumbnailInBackground(video) {
             {#if currentVideoIndex === index}
               <div class="current-indicator">PLAYING</div>
             {/if}
-          </div>
+          </button>
 
           <!-- Insertion point (only visible in reordering mode) -->
           {#if isReorderingMode}
-            <div
+            <button
               class="insertion-point"
               on:click={() => handleInsertionClick(index + 1)}
-              on:keydown={(e) => e.key === 'Enter' && handleInsertionClick(index + 1)}
-              tabindex="0"
-              role="button"
               aria-label="Insert video after position {index + 1}"
             >
               <span>+</span>
-            </div>
+            </button>
           {/if}
         {/each}
       </div>
@@ -727,11 +1015,16 @@ function generateThumbnailInBackground(video) {
 
   <!-- Insertion Interface Modal -->
   {#if showInsertionInterface}
+    <!-- svelte-ignore a11y-click-events-have-key-events -->
+    <!-- svelte-ignore a11y-no-static-element-interactions -->
     <div
       class="modal-overlay"
       role="presentation"
       on:click={() => showInsertionInterface = false}
     >
+      <!-- svelte-ignore a11y-no-noninteractive-tabindex -->
+      <!-- svelte-ignore a11y-no-static-element-interactions -->
+      <!-- svelte-ignore a11y-click-events-have-key-events -->
       <div
         class="insertion-modal"
         role="dialog"
@@ -925,6 +1218,11 @@ function generateThumbnailInBackground(video) {
     cursor: pointer;
     border: 2px solid transparent;
     transition: all 0.2s ease;
+    padding: 0;
+    width: 100%;
+    height: 100%;
+    display: flex;
+    flex-direction: column;
   }
 
   .video-thumbnail:hover {
@@ -1031,6 +1329,9 @@ function generateThumbnailInBackground(video) {
     color: #888;
     font-size: 24px;
     font-weight: bold;
+    padding: 0;
+    width: 100%;
+    height: 100%;
   }
 
   .insertion-point:hover {

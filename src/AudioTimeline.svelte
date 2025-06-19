@@ -301,8 +301,8 @@
   }
   
   function createRegion() {
-    if (!wavesurfer) return;
-    const region = wavesurfer.addRegion({
+    if (!wavesurfer || !regionsPlugin) return;
+    const region = regionsPlugin.addRegion({
       start: currentTime,
       end: Math.min(currentTime + 5, duration),
       color: `rgba(${Math.floor(Math.random() * 255)}, ${Math.floor(Math.random() * 255)}, ${Math.floor(Math.random() * 255)}, 0.2)`,

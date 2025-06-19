@@ -4,104 +4,241 @@
   export let currentVideo = null;
   export let playing = false;
   export let savedPositions = {};
+  export let getPreloadedVideo = null; // Function to get preloaded video elements
   
-  let videoElement;
+  // Dual video element system for seamless switching
+  let primaryVideo;
+  let secondaryVideo;
+  let currentActiveVideo = 'primary'; // 'primary' or 'secondary'
   let lastSavedPosition = -1;
   let wasPlaying = false;
+  let currentVideoId = null;
   const dispatch = createEventDispatcher();
   
-  $: if (videoElement && currentVideo) {
+  // Get the currently active video element
+  $: activeVideoElement = currentActiveVideo === 'primary' ? primaryVideo : secondaryVideo;
+  $: inactiveVideoElement = currentActiveVideo === 'primary' ? secondaryVideo : primaryVideo;
+  
+  $: if (currentVideo && currentVideo.id !== currentVideoId && primaryVideo) {
     handleVideoChange(currentVideo);
   }
   
   async function handleVideoChange(video) {
-    if (!videoElement || !video || !video.url) {
-      console.warn('⚠️ Invalid video or video element for change:', { video, videoElement });
+    if (!video || !video.url) {
+      console.warn('⚠️ Invalid video for change:', video);
       return;
     }
     
-    try {
-      // Always check if we need to change the video source
-      const currentSrc = videoElement.src;
-      const newSrc = video.url;
+    if (!primaryVideo) {
+      console.warn('⚠️ Primary video element not ready');
+      return;
+    }
+    
+    // If secondary video isn't ready yet, we'll use primary video only
+    if (!secondaryVideo) {
+      console.log('ℹ️ Secondary video not ready, using primary video only');
       
-      // Compare the actual URLs, handling blob URLs properly
-      if (currentSrc !== newSrc) {
-        console.log('🔄 Swapping video from', currentSrc, 'to', newSrc);
+      try {
+        const wasCurrentlyPlaying = primaryVideo && !primaryVideo.paused;
         
-        // Pause current video to prevent race conditions
-        const wasCurrentlyPlaying = !videoElement.paused;
-        if (wasCurrentlyPlaying) {
-          videoElement.pause();
-        }
-        
-        // Set new source and wait for it to load
-        videoElement.src = newSrc;
-        console.log('📝 Set src to', newSrc);
+        // Load directly into primary video
+        primaryVideo.src = video.url;
+        console.log('📝 Set primary video src to:', video.url);
         
         // Wait for video to be ready
         await new Promise((resolve, reject) => {
           const timeout = setTimeout(() => {
-            videoElement.removeEventListener('loadeddata', handleLoadedData);
-            videoElement.removeEventListener('error', handleError);
-            reject(new Error('Video load timeout'));
-          }, 10000); // 10 second timeout
+            primaryVideo.removeEventListener('loadeddata', handleLoadedData);
+            primaryVideo.removeEventListener('error', handleError);
+            reject(new Error('Primary video load timeout'));
+          }, 10000);
           
           const handleLoadedData = () => {
             clearTimeout(timeout);
-            videoElement.removeEventListener('loadeddata', handleLoadedData);
-            videoElement.removeEventListener('error', handleError);
+            primaryVideo.removeEventListener('loadeddata', handleLoadedData);
+            primaryVideo.removeEventListener('error', handleError);
+            console.log('✅ Primary video loaded successfully');
             resolve();
           };
           
           const handleError = (error) => {
             clearTimeout(timeout);
-            videoElement.removeEventListener('loadeddata', handleLoadedData);
-            videoElement.removeEventListener('error', handleError);
+            primaryVideo.removeEventListener('loadeddata', handleLoadedData);
+            primaryVideo.removeEventListener('error', handleError);
+            console.error('❌ Primary video load error:', error);
             reject(new Error(`Failed to load video: ${error.message || 'Unknown error'}`));
           };
           
-          videoElement.addEventListener('loadeddata', handleLoadedData);
-          videoElement.addEventListener('error', handleError);
-          videoElement.load();
+          primaryVideo.addEventListener('loadeddata', handleLoadedData);
+          primaryVideo.addEventListener('error', handleError);
+          primaryVideo.load();
+        });
+        
+        // Restore saved position if available
+        if (savedPositions[video.id] !== undefined) {
+          primaryVideo.currentTime = savedPositions[video.id];
+          console.log(`⏰ Restored position: ${savedPositions[video.id].toFixed(2)}s`);
+        } else {
+          primaryVideo.currentTime = 0;
+        }
+        
+        currentVideoId = video.id;
+        currentActiveVideo = 'primary';
+        
+        // Resume playback if it was playing before
+        if (wasCurrentlyPlaying && playing) {
+          await primaryVideo.play();
+          console.log('▶️ Primary video playback resumed');
+        }
+        
+        console.log('✅ Primary-only video switch completed');
+        
+      } catch (error) {
+        console.error('❌ Error during primary-only video change:', error);
+        dispatch('videoerror', { error: error.message, video });
+      }
+      
+      return;
+    }
+    
+    try {
+      console.log('🔄 Switching to video:', video.name, 'URL:', video.url);
+      
+      const wasCurrentlyPlaying = activeVideoElement && !activeVideoElement.paused;
+      
+      // Check if we have a preloaded video for seamless switching
+      const preloadedVideo = getPreloadedVideo ? getPreloadedVideo(video.id) : null;
+      
+      if (preloadedVideo && preloadedVideo.readyState >= 2) {
+        console.log('⚡ Using preloaded video for instant switch:', video.name);
+        
+        // Copy the preloaded video state to the inactive video element
+        inactiveVideoElement.src = preloadedVideo.src;
+        
+        // Wait for the inactive video to be ready
+        if (inactiveVideoElement.readyState < 2) {
+          await new Promise((resolve, reject) => {
+            const timeout = setTimeout(() => {
+              inactiveVideoElement.removeEventListener('loadeddata', handleReady);
+              reject(new Error('Preload copy timeout'));
+            }, 5000);
+            
+            const handleReady = () => {
+              clearTimeout(timeout);
+              inactiveVideoElement.removeEventListener('loadeddata', handleReady);
+              resolve();
+            };
+            inactiveVideoElement.addEventListener('loadeddata', handleReady);
+            inactiveVideoElement.load();
+          });
+        }
+        
+        // Restore saved position if available
+        if (savedPositions[video.id] !== undefined) {
+          inactiveVideoElement.currentTime = savedPositions[video.id];
+          console.log(`⏰ Restored position: ${savedPositions[video.id].toFixed(2)}s`);
+        } else {
+          inactiveVideoElement.currentTime = preloadedVideo.currentTime;
+        }
+        
+        // Instant switch by swapping active/inactive
+        const previousActive = currentActiveVideo;
+        currentActiveVideo = currentActiveVideo === 'primary' ? 'secondary' : 'primary';
+        
+        // If video was playing, start the new active video immediately
+        if (wasCurrentlyPlaying && playing) {
+          await activeVideoElement.play();
+        }
+        
+        // Pause the now-inactive video
+        if (inactiveVideoElement && !inactiveVideoElement.paused) {
+          inactiveVideoElement.pause();
+        }
+        
+        console.log(`✅ Seamless switch completed: ${previousActive} -> ${currentActiveVideo}`);
+        
+      } else {
+        console.log('🔄 Loading video directly (no preload available)');
+        
+        // Load video into inactive element
+        inactiveVideoElement.src = video.url;
+        console.log('📝 Set inactive video src to:', video.url);
+        
+        // Wait for video to be ready
+        await new Promise((resolve, reject) => {
+          const timeout = setTimeout(() => {
+            inactiveVideoElement.removeEventListener('loadeddata', handleLoadedData);
+            inactiveVideoElement.removeEventListener('error', handleError);
+            reject(new Error('Video load timeout'));
+          }, 10000);
+          
+          const handleLoadedData = () => {
+            clearTimeout(timeout);
+            inactiveVideoElement.removeEventListener('loadeddata', handleLoadedData);
+            inactiveVideoElement.removeEventListener('error', handleError);
+            console.log('✅ Inactive video loaded successfully');
+            resolve();
+          };
+          
+          const handleError = (error) => {
+            clearTimeout(timeout);
+            inactiveVideoElement.removeEventListener('loadeddata', handleLoadedData);
+            inactiveVideoElement.removeEventListener('error', handleError);
+            console.error('❌ Inactive video load error:', error);
+            reject(new Error(`Failed to load video: ${error.message || 'Unknown error'}`));
+          };
+          
+          inactiveVideoElement.addEventListener('loadeddata', handleLoadedData);
+          inactiveVideoElement.addEventListener('error', handleError);
+          inactiveVideoElement.load();
         });
         
         console.log('✅ Video loaded successfully:', video.name);
         
-        // Restore saved position after video is loaded
+        // Restore saved position
         if (savedPositions[video.id] !== undefined) {
-          videoElement.currentTime = savedPositions[video.id];
+          inactiveVideoElement.currentTime = savedPositions[video.id];
           console.log(`⏰ Restored position: ${savedPositions[video.id].toFixed(2)}s`);
         } else {
-          videoElement.currentTime = 0;
+          inactiveVideoElement.currentTime = 0;
         }
+        
+        // Switch to the newly loaded video
+        const previousActive = currentActiveVideo;
+        currentActiveVideo = currentActiveVideo === 'primary' ? 'secondary' : 'primary';
+        console.log(`🔄 Switched active video: ${previousActive} -> ${currentActiveVideo}`);
         
         // Resume playback if it was playing before
         if (wasCurrentlyPlaying && playing) {
-          await videoElement.play();
+          await activeVideoElement.play();
         }
-      } else {
-        console.log('ℹ️ Video source unchanged, skipping reload');
+        
+        // Pause the now-inactive video
+        if (inactiveVideoElement && !inactiveVideoElement.paused) {
+          inactiveVideoElement.pause();
+        }
       }
+      
+      currentVideoId = video.id;
+      
     } catch (error) {
       console.error('❌ Error during video change:', error);
-      // Dispatch error event for parent to handle
       dispatch('videoerror', { error: error.message, video });
     }
   }
   
-  $: if (videoElement && playing !== undefined) {
+  $: if (activeVideoElement && playing !== undefined) {
     handlePlayStateChange(playing);
   }
   
   async function handlePlayStateChange(shouldPlay) {
-    if (!videoElement || !currentVideo) return;
+    if (!activeVideoElement || !currentVideo) return;
     
     try {
       if (shouldPlay && !wasPlaying) {
         // Validate video is ready before playing
-        if (videoElement.readyState >= 2) { // HAVE_CURRENT_DATA
-          await videoElement.play();
+        if (activeVideoElement.readyState >= 2) { // HAVE_CURRENT_DATA
+          await activeVideoElement.play();
           wasPlaying = true;
           console.log('▶️ Video playback started');
         } else {
@@ -109,29 +246,29 @@
           // Wait for video to be ready
           await new Promise((resolve) => {
             const handleCanPlay = () => {
-              videoElement.removeEventListener('canplay', handleCanPlay);
+              activeVideoElement.removeEventListener('canplay', handleCanPlay);
               resolve();
             };
-            videoElement.addEventListener('canplay', handleCanPlay);
+            activeVideoElement.addEventListener('canplay', handleCanPlay);
           });
-          await videoElement.play();
+          await activeVideoElement.play();
           wasPlaying = true;
           console.log('▶️ Video playback started (after waiting)');
         }
       } else if (!shouldPlay && wasPlaying) {
         // Pause and save position
-        videoElement.pause();
+        activeVideoElement.pause();
         wasPlaying = false;
         console.log('⏸️ Video playback paused');
         
         // Save current position when pausing (only if position changed significantly)
-        if (currentVideo && Math.abs(videoElement.currentTime - lastSavedPosition) > 0.1) {
-          lastSavedPosition = videoElement.currentTime;
+        if (currentVideo && Math.abs(activeVideoElement.currentTime - lastSavedPosition) > 0.1) {
+          lastSavedPosition = activeVideoElement.currentTime;
           dispatch('saveposition', {
             id: currentVideo.id,
-            position: videoElement.currentTime
+            position: activeVideoElement.currentTime
           });
-          console.log(`💾 Position saved: ${videoElement.currentTime.toFixed(2)}s`);
+          console.log(`💾 Position saved: ${activeVideoElement.currentTime.toFixed(2)}s`);
         }
       }
     } catch (error) {
@@ -146,31 +283,54 @@
   
   function handleEnded() {
     // When video ends, we'll loop it
-    if (videoElement && playing) {
-      videoElement.currentTime = 0;
-      videoElement.play().catch(err => console.error('Video loop error:', err));
+    if (activeVideoElement && playing) {
+      activeVideoElement.currentTime = 0;
+      activeVideoElement.play().catch(err => console.error('Video loop error:', err));
     }
   }
   
   onMount(() => {
-    if (videoElement && currentVideo) {
-      videoElement.src = currentVideo.url;
+    if (primaryVideo && currentVideo) {
+      console.log('🎬 Initial video load:', currentVideo.name, 'URL:', currentVideo.url);
+      primaryVideo.src = currentVideo.url;
+      currentVideoId = currentVideo.id;
+      currentActiveVideo = 'primary';
+      
+      // Ensure the primary video is visible initially
+      primaryVideo.addEventListener('loadeddata', () => {
+        console.log('✅ Initial video loaded successfully');
+      });
+      
+      primaryVideo.load();
     }
   });
   
   // Export method to get current video time
   export function getCurrentTime() {
-    return videoElement ? videoElement.currentTime : null;
+    return activeVideoElement ? activeVideoElement.currentTime : null;
   }
 </script>
 
 <div class="video-player">
   {#if currentVideo}
+    <!-- Primary video element -->
     <video
-      bind:this={videoElement}
-      src={currentVideo.url}
+      bind:this={primaryVideo}
+      class="video-element {currentActiveVideo === 'primary' ? 'active' : 'inactive'}"
       on:ended={handleEnded}
-      aria-label="Video player for {currentVideo.name}"
+      aria-label="Primary video player for {currentVideo.name}"
+      muted={currentActiveVideo !== 'primary'}
+    >
+      <track kind="captions" src="" label="No captions available" default />
+    </video>
+    
+    <!-- Secondary video element -->
+    <video
+      bind:this={secondaryVideo}
+      class="video-element {currentActiveVideo === 'secondary' ? 'active' : 'inactive'}"
+      on:ended={handleEnded}
+      aria-label="Secondary video player for {currentVideo.name}"
+      muted={currentActiveVideo !== 'secondary'}
     >
       <track kind="captions" src="" label="No captions available" default />
     </video>
@@ -189,17 +349,32 @@
     display: flex;
     align-items: center;
     justify-content: center;
+    position: relative;
   }
   
-  video {
+  .video-element {
     width: 100%;
     height: 100%;
     object-fit: cover;
-    display: block;
+    position: absolute;
+    top: 0;
+    left: 0;
+    transition: opacity 0.1s ease-in-out;
+  }
+  
+  .video-element.active {
+    opacity: 1;
+    z-index: 2;
+  }
+  
+  .video-element.inactive {
+    opacity: 0;
+    z-index: 1;
   }
   
   .no-video {
     color: #666;
     font-size: 18px;
+    z-index: 3;
   }
 </style>
