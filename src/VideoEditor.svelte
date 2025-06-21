@@ -31,7 +31,8 @@
   let lastMarkerIndex = $state(-1);
   let markerCount = $state(0);
   let lastSwitchTime = $state(0); // Throttle switching
-  let minSwitchInterval = $state(500); // Minimum 500ms between switches
+  let minSwitchInterval = $state(200); // Minimum 200ms between switches - reduced for smoother switching
+  let seenVideos = $state(new Set()); // Track which videos we've seen in this cycle
   
   // UI state
   let isReorderingMode = $state(false);
@@ -111,7 +112,7 @@
     if (isPlaying && markers.length > 0 && videos.length > 1) {
       const now = Date.now();
       // Throttle marker checking and avoid checking the same time twice
-      if (now - lastMarkerCheckTime > 100 && currentTime !== lastCheckedTime) {
+      if (now - lastMarkerCheckTime > 32 && Math.abs(currentTime - lastCheckedTime) > 0.01) { // Better precision
         lastMarkerCheckTime = now;
         lastCheckedTime = currentTime;
         checkMarkerSwitching(currentTime);
@@ -187,8 +188,8 @@
     }
 
     try {
-      // Find the current marker index
-      const currentMarkerIndex = markers.findIndex(marker => marker > time) - 1;
+      // Find the current marker index with better precision
+      const currentMarkerIndex = markers.findIndex(marker => marker > time + 0.05) - 1; // Add 50ms tolerance
 
       if (currentMarkerIndex !== lastMarkerIndex && currentMarkerIndex >= 0) {
         markerCount++;
@@ -278,8 +279,19 @@
         return false;
       }
 
+      // INSTANT SWITCH: Just change the index, VideoPlayer will handle the transition
       currentVideoIndex = nextIndex;
-      console.log(`🎬 Switched from video ${previousIndex + 1} (${previousVideo?.name || 'none'}) to video ${currentVideoIndex + 1} (${nextVideo?.name || 'none'})`);
+      
+      // Check if this is a video we've seen before (looping back)
+      const isLoopingBack = seenVideos.has(nextVideo.id);
+      if (isLoopingBack) {
+        console.log(`🔄 LOOPING BACK to video ${currentVideoIndex + 1} (${nextVideo?.name}) - clearing saved position for smooth transition`);
+        // Clear saved position to avoid jumps when looping back
+        delete savedPositions[nextVideo.id];
+      } else {
+        console.log(`🎬 FIRST TIME seeing video ${currentVideoIndex + 1} (${nextVideo?.name})`);
+        seenVideos.add(nextVideo.id);
+      }
 
       // Log if we have a saved position for the new video
       if (savedPositions[nextVideo.id] !== undefined) {

@@ -159,7 +159,7 @@
     let lastAudioprocessTime = 0;
     wavesurfer.on('audioprocess', () => {
       const now = Date.now();
-      if (now - lastAudioprocessTime > 50) { // Throttle to 20 FPS max
+      if (now - lastAudioprocessTime > 16) { // Throttle to ~60 FPS for better precision
         lastAudioprocessTime = now;
         currentTime = wavesurfer.getCurrentTime();
 
