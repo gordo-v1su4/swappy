@@ -10,7 +10,8 @@
     isPlaying = false,
     currentTime = 0,
     duration = 0,
-    audioMarkers = [] // Real markers from AudioTimeline
+    audioMarkers = [], // Real markers from AudioTimeline
+    speedRampState = { enabled: false, currentSpeed: 1.0 } // Speed ramping state from AudioTimeline
   } = $props();
   
   // Video management state using Svelte 5 runes
@@ -19,6 +20,10 @@
   let currentVideo = $state(null);
   let savedPositions = $state({});
   let videoPlayerComponent = $state();
+  
+  // Speed ramping state
+  let currentVideoSpeed = $state(1.0);
+  let speedRampTimeout = $state(null);
   
   // Video preloading for seamless switching
   let preloadedVideos = $state(new Map()); // Map of video IDs to preloaded video elements
@@ -47,6 +52,23 @@
   
   // Derived state for current video
   let currentVideoComputed = $derived(videos.length > 0 ? videos[currentVideoIndex] : null);
+  
+  // Effect to handle speed ramping changes
+  $effect(() => {
+    console.log('🎬 VideoEditor: Speed ramp state changed:', speedRampState);
+    if (speedRampState && speedRampState.currentSpeed !== currentVideoSpeed) {
+      console.log('🚀 VideoEditor: Applying speed ramp:', speedRampState.currentSpeed);
+      currentVideoSpeed = speedRampState.currentSpeed;
+      
+      // Apply speed to video player
+      if (videoPlayerComponent && videoPlayerComponent.setPlaybackRate) {
+        console.log('📺 Calling setPlaybackRate on video player');
+        videoPlayerComponent.setPlaybackRate(currentVideoSpeed);
+      } else {
+        console.warn('⚠️ VideoPlayer component not ready or missing setPlaybackRate method');
+      }
+    }
+  });
   
   // Load beat markers from external source (placeholder for now)
   onMount(() => {
@@ -949,6 +971,7 @@ function getPreloadedVideo(videoId) {
       playing={isPlaying}
       {savedPositions}
       {getPreloadedVideo}
+      playbackRate={currentVideoSpeed}
       on:saveposition={handleVideoPositionSave}
       on:videoerror={handleVideoError}
     />

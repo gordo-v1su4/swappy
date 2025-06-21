@@ -42,13 +42,83 @@
   
   // Transient detection variables
   let isDetectingTransients = $state(false);
-  let transientDensity = $state(50); // Default value, range 0-100
-  let transientRandomness = $state(30); // Default value, range 0-100
-  let transientSensitivity = $state(70); // How sensitive detection is, range 0-100
-  let transientMinSpacing = $state(0.5); // Minimum time (in seconds) between transients
+  let transientDensity = $state(30); // Default value, range 0-100 (reduced from 50)
+  let transientRandomness = $state(50); // Default value, range 0-100 (increased from 30)
+  let transientSensitivity = $state(60); // How sensitive detection is, range 0-100 (reduced from 70)
+  let transientMinSpacing = $state(0.8); // Minimum time (in seconds) between transients (increased from 0.5)
   let transientMarkers = $state([]); // Store transient markers separately
   let isTransientHit = $state(false); // Indicator for transient detection light
   let transientHitTimeout = $state(null); // Timeout for turning off the hit indicator
+  
+  // Speed ramping variables
+  let speedRampEnabled = $state(false);
+  let speedRampMaxSpeed = $state(2.0); // Maximum speed multiplier, range 0.1-3.0
+  let speedRampIntensity = $state(50); // How often effect triggers (0-100%), replaces randomness
+  let speedRampTrigger = $state('transients'); // 'transients', 'frequency-swell', 'bass-hits'
+  let speedRampDuration = $state(4.0); // Total duration of speed ramp in seconds
+  let speedRampTransitionTime = $state(1.0); // Time to ramp up/down in seconds
+  let currentSpeedRamp = $state(1.0); // Current speed multiplier being applied
+  let speedRampTimeout = $state(null); // Timeout for resetting speed ramp
+  let speedRampActive = $state(false); // Visual indicator for when speed ramp is active
+  let lastSpeedRampTime = $state(0); // Timestamp of last speed ramp to prevent spam
+  let speedRampStartTime = $state(0); // When the current ramp started
+  let speedRampAnimationFrame = $state(null); // Animation frame for smooth ramping
+  let audioReactiveSpeed = $state(1.0); // Speed calculated from audio intensity
+  let audioEnergyBuffer = $state([]); // Buffer to smooth audio energy readings
+  
+  // Debug effect to track speedRampActive changes
+  $effect(() => {
+    console.log('🔍 speedRampActive changed to:', speedRampActive, 'currentSpeedRamp:', currentSpeedRamp);
+  });
+  
+  // Audio-reactive speed calculation
+  function calculateAudioReactiveSpeed() {
+    if (!wavesurfer || !isPlaying) return 1.0;
+    
+    try {
+      // Get audio buffer data for current position
+      const audioBuffer = wavesurfer.getDecodedData();
+      if (!audioBuffer) return 1.0;
+      
+      const currentTimeSeconds = wavesurfer.getCurrentTime();
+      const sampleRate = audioBuffer.sampleRate;
+      const channelData = audioBuffer.getChannelData(0);
+      
+      // Calculate current sample index
+      const currentSample = Math.floor(currentTimeSeconds * sampleRate);
+      
+      // Analyze energy in a small window around current position (50ms window)
+      const windowSize = Math.floor(sampleRate * 0.05); // 50ms
+      const startSample = Math.max(0, currentSample - windowSize / 2);
+      const endSample = Math.min(channelData.length - 1, currentSample + windowSize / 2);
+      
+      // Calculate RMS energy for the window
+      let energy = 0;
+      for (let i = startSample; i < endSample; i++) {
+        energy += channelData[i] * channelData[i];
+      }
+      const rmsEnergy = Math.sqrt(energy / (endSample - startSample));
+      
+      // Smooth the energy reading
+      audioEnergyBuffer.push(rmsEnergy);
+      if (audioEnergyBuffer.length > 10) {
+        audioEnergyBuffer.shift(); // Keep only last 10 readings
+      }
+      
+      // Calculate smoothed energy
+      const smoothedEnergy = audioEnergyBuffer.reduce((sum, val) => sum + val, 0) / audioEnergyBuffer.length;
+      
+      // Map energy to speed (higher energy = higher speed)
+      // Energy typically ranges from 0 to 0.5, map to 1.0x to maxSpeed
+      const normalizedEnergy = Math.min(1.0, smoothedEnergy * 4); // Amplify sensitivity
+      const reactiveSpeed = 1.0 + (speedRampMaxSpeed - 1.0) * normalizedEnergy;
+      
+      return reactiveSpeed;
+    } catch (error) {
+      console.warn('Audio reactive calculation failed:', error);
+      return 1.0;
+    }
+  }
   
   // Generate unique shades of blue and purple for markers
   function generateMarkerColor(index) {
@@ -903,6 +973,133 @@
       transientHitTimeout = setTimeout(() => {
         isTransientHit = false;
       }, 150); // Light stays on for 150ms
+      
+      // Trigger speed ramping if enabled and using transient trigger
+      if (speedRampEnabled && speedRampTrigger === 'transients') {
+        console.log('🎵 Transient hit detected, triggering speed ramp...');
+        triggerSpeedRamp();
+      } else {
+        console.log('🔇 Speed ramp conditions not met. Enabled:', speedRampEnabled, 'Trigger:', speedRampTrigger);
+      }
+    }
+  }
+  
+  // Speed ramping curve calculation
+  function calculateSpeedAtTime(elapsedSeconds, targetSpeed) {
+    const transitionTime = speedRampTransitionTime;
+    const totalDuration = speedRampDuration;
+    const holdTime = totalDuration - (2 * transitionTime);
+    
+    if (elapsedSeconds <= transitionTime) {
+      // Ramp UP phase: 1.0 to targetSpeed
+      const progress = elapsedSeconds / transitionTime;
+      const easedProgress = 0.5 - 0.5 * Math.cos(progress * Math.PI); // Smooth ease in/out
+      return 1.0 + (targetSpeed - 1.0) * easedProgress;
+    } else if (elapsedSeconds <= transitionTime + holdTime) {
+      // HOLD phase: maintain targetSpeed
+      return targetSpeed;
+    } else if (elapsedSeconds < totalDuration) {
+      // Ramp DOWN phase: targetSpeed to 1.0
+      const downPhaseStart = transitionTime + holdTime;
+      const downProgress = (elapsedSeconds - downPhaseStart) / transitionTime;
+      const easedProgress = 0.5 - 0.5 * Math.cos(downProgress * Math.PI); // Smooth ease in/out
+      return targetSpeed - (targetSpeed - 1.0) * easedProgress;
+    } else {
+      // Finished
+      return 1.0;
+    }
+  }
+  
+  // Smooth speed ramping animation
+  function updateSpeedRamp() {
+    if (!speedRampActive) return;
+    
+    const now = Date.now();
+    const elapsedMs = now - speedRampStartTime;
+    const elapsedSeconds = elapsedMs / 1000;
+    
+    if (elapsedSeconds >= speedRampDuration) {
+      // Finished ramping
+      currentSpeedRamp = 1.0;
+      speedRampActive = false;
+      console.log('⏮️ Speed ramp completed - returning to 1.0x');
+      
+      dispatch('speedramp', {
+        speed: 1.0,
+        duration: 100
+      });
+      
+      if (speedRampAnimationFrame) {
+        cancelAnimationFrame(speedRampAnimationFrame);
+        speedRampAnimationFrame = null;
+      }
+    } else {
+      // Calculate current speed based on curve AND audio reactivity
+      audioReactiveSpeed = calculateAudioReactiveSpeed();
+      const curveTargetSpeed = speedRampMaxSpeed;
+      const curveSpeed = calculateSpeedAtTime(elapsedSeconds, curveTargetSpeed);
+      
+      // Blend curve position with audio reactivity
+      // During ramp up/down: prioritize curve, during hold: prioritize audio
+      const transitionTime = speedRampTransitionTime;
+      const holdStartTime = transitionTime;
+      const holdEndTime = speedRampDuration - transitionTime;
+      
+      if (elapsedSeconds >= holdStartTime && elapsedSeconds <= holdEndTime) {
+        // In hold phase: blend heavily toward audio reactivity
+        currentSpeedRamp = curveSpeed * 0.3 + audioReactiveSpeed * 0.7;
+      } else {
+        // In ramp phases: blend toward curve for smoothness
+        currentSpeedRamp = curveSpeed * 0.8 + audioReactiveSpeed * 0.2;
+      }
+      
+      // Dispatch current speed
+      dispatch('speedramp', {
+        speed: currentSpeedRamp,
+        duration: 50 // Frequent updates for smooth ramping
+      });
+      
+      // Schedule next update
+      speedRampAnimationFrame = requestAnimationFrame(updateSpeedRamp);
+    }
+  }
+  
+  // Speed ramping trigger logic
+  function triggerSpeedRamp() {
+    if (!speedRampEnabled) {
+      console.log('🚫 Speed ramp not enabled');
+      return;
+    }
+    
+    // Prevent spam - minimum time between ramps
+    const now = Date.now();
+    const cooldownTime = speedRampDuration * 1000 + 1000; // Duration + 1 second
+    if (now - lastSpeedRampTime < cooldownTime) {
+      console.log('⏱️ Speed ramp cooldown active');
+      return;
+    }
+    
+    console.log('🎯 Speed ramp triggered! Intensity:', speedRampIntensity + '%');
+    
+    // Apply intensity (higher intensity = higher chance of triggering)
+    const randomChance = Math.random() * 100;
+    if (randomChance < speedRampIntensity) {
+      lastSpeedRampTime = now;
+      speedRampStartTime = now;
+      speedRampActive = true;
+      
+      const targetSpeed = speedRampMaxSpeed * (0.8 + Math.random() * 0.4);
+      console.log('🚀 Starting speed ramp curve to', targetSpeed.toFixed(2) + 'x over', speedRampDuration, 'seconds');
+      console.log('📈 Ramp up:', speedRampTransitionTime + 's, Hold:', (speedRampDuration - 2 * speedRampTransitionTime).toFixed(1) + 's, Ramp down:', speedRampTransitionTime + 's');
+      
+      // Start the smooth ramping animation
+      if (speedRampAnimationFrame) {
+        cancelAnimationFrame(speedRampAnimationFrame);
+      }
+      speedRampAnimationFrame = requestAnimationFrame(updateSpeedRamp);
+      
+    } else {
+      console.log('🎲 Intensity check failed (', randomChance.toFixed(1), '% >=', speedRampIntensity + '%)');
     }
   }
   
@@ -913,6 +1110,21 @@
       type: 'transient',
       data: marker.data
     }));
+  }
+  
+  // Export speed ramping state
+  export function getSpeedRampState() {
+    return {
+      enabled: speedRampEnabled,
+      currentSpeed: currentSpeedRamp,
+      maxSpeed: speedRampMaxSpeed,
+      intensity: speedRampIntensity,
+      trigger: speedRampTrigger,
+      duration: speedRampDuration,
+      transitionTime: speedRampTransitionTime,
+      active: speedRampActive,
+      audioReactiveSpeed: audioReactiveSpeed
+    };
   }
   
   export function getUserMarkers() {
@@ -1319,7 +1531,7 @@
     border-color: #333;
   }
   
-  .transient-controls {
+  .analysis-controls {
     margin-top: 20px;
     padding: 15px;
     background-color: #18181b; /* zinc-900 */
@@ -1327,27 +1539,63 @@
     border: 1px solid #3f3f46; /* zinc-700 */
   }
   
-  .transient-controls h3 {
+  .analysis-section {
+    margin-bottom: 25px;
+  }
+  
+  .analysis-section:last-child {
+    margin-bottom: 0;
+  }
+  
+  .analysis-controls h2 {
+    margin-top: 0;
+    margin-bottom: 20px;
+    font-size: 16px;
+    color: #e6e6e6;
+    border-bottom: 1px solid #3f3f46;
+    padding-bottom: 8px;
+  }
+  
+  .analysis-controls h3 {
     margin-top: 0;
     margin-bottom: 15px;
     font-size: 14px;
     color: #e6e6e6;
   }
   
-  .transient-sliders {
+  .analysis-sliders {
     display: grid;
     grid-template-columns: repeat(4, 1fr);
     gap: 10px;
   }
   
   @media (max-width: 992px) {
-    .transient-sliders {
+    .analysis-sliders {
       grid-template-columns: repeat(2, 1fr);
     }
   }
   
   @media (max-width: 576px) {
-    .transient-sliders {
+    .analysis-sliders {
+      grid-template-columns: 1fr;
+    }
+  }
+  
+  .speed-ramp-controls {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 10px;
+    margin-top: 10px;
+  }
+  
+  @media (max-width: 992px) {
+    .speed-ramp-controls {
+      grid-template-columns: repeat(2, 1fr);
+    }
+  }
+  
+  @media (max-width: 576px) {
+    .speed-ramp-controls {
       grid-template-columns: 1fr;
     }
   }
@@ -1392,7 +1640,36 @@
     border-color: #333;
   }
   
-  .transient-header {
+  .speed-toggle {
+    background-color: #8b5cf6; /* violet */
+    color: white;
+    border-color: transparent;
+    margin-top: 10px;
+  }
+  
+  .speed-toggle:hover {
+    background-color: #a78bfa;
+    box-shadow: 0 3px 8px rgba(139, 92, 246, 0.4);
+  }
+  
+  .speed-toggle:active {
+    background-color: #7c3aed;
+  }
+  
+  .speed-toggle.enabled {
+    background-color: #10b981; /* emerald */
+  }
+  
+  .speed-toggle.enabled:hover {
+    background-color: #34d399;
+    box-shadow: 0 3px 8px rgba(16, 185, 129, 0.4);
+  }
+  
+  .speed-toggle.enabled:active {
+    background-color: #059669;
+  }
+  
+  .analysis-header {
     display: flex;
     justify-content: space-between;
     align-items: center;
@@ -1430,6 +1707,52 @@
   }
   
   .detection-indicator.hit::after {
+    opacity: 1;
+  }
+  
+  .speed-indicator {
+    width: 12px;
+    height: 12px;
+    border-radius: 50%;
+    background-color: #1a1a1a; /* Darker when inactive */
+    border: 1px solid #333;
+    transition: all 0.2s ease;
+    position: relative;
+    --speed-intensity: 0;
+  }
+  
+  .speed-indicator.active {
+    /* Dynamic background based on speed intensity - from dark to bright purple */
+    background-color: rgb(
+      calc(26 + (139 - 26) * var(--speed-intensity)), 
+      calc(26 + (92 - 26) * var(--speed-intensity)), 
+      calc(26 + (246 - 26) * var(--speed-intensity))
+    );
+    /* Dynamic glow based on speed intensity */
+    box-shadow: 0 0 calc(2px + 10px * var(--speed-intensity)) calc(0px + 4px * var(--speed-intensity)) 
+      rgba(139, 92, 246, calc(0.1 + 0.9 * var(--speed-intensity)));
+    border-color: rgb(
+      calc(51 + (139 - 51) * var(--speed-intensity)), 
+      calc(51 + (92 - 51) * var(--speed-intensity)), 
+      calc(51 + (246 - 51) * var(--speed-intensity))
+    );
+  }
+  
+  .speed-indicator::after {
+    content: '';
+    position: absolute;
+    top: -2px;
+    left: -2px;
+    right: -2px;
+    bottom: -2px;
+    border-radius: 50%;
+    background: transparent;
+    border: 1px solid rgba(255, 255, 255, calc(0.1 + 0.3 * var(--speed-intensity)));
+    opacity: 0;
+    transition: opacity 0.2s ease;
+  }
+  
+  .speed-indicator.active::after {
     opacity: 1;
   }
 </style>
@@ -1565,75 +1888,170 @@
     </button>
   </div>
   
-  <!-- Transient Detection Controls -->
-  <div class="transient-controls">
-    <div class="transient-header">
-      <h3>Transient Detection</h3>
-      <div class="detection-indicator" class:hit={isTransientHit}></div>
+  <!-- Analysis Controls -->
+  <div class="analysis-controls">
+    <h2>Analysis</h2>
+    
+    <!-- Transient Detection Section -->
+    <div class="analysis-section">
+      <div class="analysis-header">
+        <h3>Transient Detection</h3>
+        <div class="detection-indicator" class:hit={isTransientHit}></div>
+      </div>
+      
+      <div class="analysis-sliders">
+        <div class="slider-group">
+          <label for="density-slider">Density <span class="slider-value">{transientDensity}%</span></label>
+          <input
+            id="density-slider"
+            type="range"
+            class="slider slider-teal"
+            min="1"
+            max="100"
+            bind:value={transientDensity}
+          />
+        </div>
+        
+        <div class="slider-group">
+          <label for="randomness-slider">Randomness <span class="slider-value">{transientRandomness}%</span></label>
+          <input
+            id="randomness-slider"
+            type="range"
+            class="slider slider-teal"
+            min="0"
+            max="100"
+            bind:value={transientRandomness}
+          />
+        </div>
+        
+        <div class="slider-group">
+          <label for="sensitivity-slider">Sensitivity <span class="slider-value">{transientSensitivity}%</span></label>
+          <input
+            id="sensitivity-slider"
+            type="range"
+            class="slider slider-teal"
+            min="1"
+            max="100"
+            bind:value={transientSensitivity}
+          />
+        </div>
+        
+        <div class="slider-group">
+          <label for="spacing-slider">Min Spacing <span class="slider-value">{transientMinSpacing.toFixed(2)}s</span></label>
+          <input
+            id="spacing-slider"
+            type="range"
+            class="slider slider-teal"
+            min="0"
+            max="2"
+            step="0.05"
+            bind:value={transientMinSpacing}
+          />
+        </div>
+      </div>
+      
+      <button
+        class="button detect-button"
+        on:click={detectTransients}
+        disabled={!isLoaded || isDetectingTransients}
+      >
+        {#if isDetectingTransients}
+          <span class="loading"></span> Detecting Transients...
+        {:else}
+          Detect Transients
+        {/if}
+      </button>
     </div>
     
-    <div class="transient-sliders">
-      <div class="slider-group">
-        <label for="density-slider">Density <span class="slider-value">{transientDensity}%</span></label>
-        <input
-          id="density-slider"
-          type="range"
-          class="slider slider-teal"
-          min="1"
-          max="100"
-          bind:value={transientDensity}
-        />
+    <!-- Speed Ramping Section -->
+    <div class="analysis-section">
+      <div class="analysis-header">
+        <h3>Speed Ramping</h3>
+        <div style="display: flex; gap: 10px; align-items: center;">
+          <div 
+            class="speed-indicator" 
+            class:active={speedRampActive} 
+            style="--speed-intensity: {speedRampActive ? Math.min(1.0, Math.max(0.0, (currentSpeedRamp - 1.0) / (speedRampMaxSpeed - 1.0))) : 0}"
+            title="Speed: {currentSpeedRamp.toFixed(1)}x | Audio: {audioReactiveSpeed.toFixed(1)}x | Active: {speedRampActive ? 'YES' : 'NO'}"
+          ></div>
+          <button
+            class="button speed-toggle"
+            class:enabled={speedRampEnabled}
+            on:click={() => speedRampEnabled = !speedRampEnabled}
+          >
+            {speedRampEnabled ? 'Enabled' : 'Disabled'}
+          </button>
+        </div>
       </div>
       
-      <div class="slider-group">
-        <label for="randomness-slider">Randomness <span class="slider-value">{transientRandomness}%</span></label>
-        <input
-          id="randomness-slider"
-          type="range"
-          class="slider slider-teal"
-          min="0"
-          max="100"
-          bind:value={transientRandomness}
-        />
-      </div>
-      
-      <div class="slider-group">
-        <label for="sensitivity-slider">Sensitivity <span class="slider-value">{transientSensitivity}%</span></label>
-        <input
-          id="sensitivity-slider"
-          type="range"
-          class="slider slider-teal"
-          min="1"
-          max="100"
-          bind:value={transientSensitivity}
-        />
-      </div>
-      
-      <div class="slider-group">
-        <label for="spacing-slider">Min Spacing <span class="slider-value">{transientMinSpacing.toFixed(2)}s</span></label>
-        <input
-          id="spacing-slider"
-          type="range"
-          class="slider slider-teal"
-          min="0"
-          max="2"
-          step="0.05"
-          bind:value={transientMinSpacing}
-        />
-      </div>
-    </div>
-    
-    <button
-      class="button detect-button"
-      on:click={detectTransients}
-      disabled={!isLoaded || isDetectingTransients}
-    >
-      {#if isDetectingTransients}
-        <span class="loading"></span> Detecting Transients...
-      {:else}
-        Detect Transients
+      {#if speedRampEnabled}
+        <div class="speed-ramp-controls">
+          <div class="slider-group">
+            <label for="speed-max-slider">Max Speed <span class="slider-value">{speedRampMaxSpeed.toFixed(1)}x</span></label>
+            <input
+              id="speed-max-slider"
+              type="range"
+              class="slider slider-teal"
+              min="1.1"
+              max="5.0"
+              step="0.1"
+              bind:value={speedRampMaxSpeed}
+            />
+          </div>
+          
+          <div class="slider-group">
+            <label for="speed-intensity-slider">Effect Intensity <span class="slider-value">{speedRampIntensity}%</span></label>
+            <input
+              id="speed-intensity-slider"
+              type="range"
+              class="slider slider-teal"
+              min="0"
+              max="100"
+              bind:value={speedRampIntensity}
+            />
+          </div>
+          
+          <div class="slider-group">
+            <label for="speed-duration-slider">Total Duration <span class="slider-value">{speedRampDuration.toFixed(1)}s</span></label>
+            <input
+              id="speed-duration-slider"
+              type="range"
+              class="slider slider-teal"
+              min="1.0"
+              max="12.0"
+              step="0.5"
+              bind:value={speedRampDuration}
+            />
+          </div>
+          
+          <div class="slider-group">
+            <label for="speed-transition-slider">Ramp Time <span class="slider-value">{speedRampTransitionTime.toFixed(1)}s</span></label>
+            <input
+              id="speed-transition-slider"
+              type="range"
+              class="slider slider-teal"
+              min="0.5"
+              max="3.0"
+              step="0.1"
+              bind:value={speedRampTransitionTime}
+            />
+          </div>
+        </div>
+        
+        <div class="slider-group" style="margin-top: 10px;">
+          <label for="trigger-select">Trigger Type</label>
+          <select
+            id="trigger-select"
+            bind:value={speedRampTrigger}
+            style="padding: 5px; background-color: #27272a; color: #e6e6e6; border: 1px solid #3f3f46; border-radius: 4px;"
+          >
+            <option value="transients">Transients</option>
+            <option value="frequency-swell">Frequency Swells</option>
+            <option value="bass-hits">Bass Hits</option>
+          </select>
+        </div>
       {/if}
-    </button>
+    </div>
   </div>
   
   {#if songStructure.length > 0}

@@ -18,12 +18,32 @@ let audioState = $state({
 let audioMarkers = $state([]);
 let audioTimelineComponent = $state();
 
+// Speed ramping state
+let speedRampState = $state({
+  enabled: false,
+  currentSpeed: 1.0,
+  amount: 1.5,
+  randomness: 20,
+  trigger: 'transients',
+  duration: 0.3
+});
+
 function handleFileSelect(event) {
   selectedAudioUrl = event.detail.url;
 }
 
 function handleAudioState(event) {
   audioState = event.detail;
+}
+
+function handleSpeedRamp(event) {
+  console.log('🚀 App.svelte: Speed ramp event received:', event.detail);
+  speedRampState = {
+    ...speedRampState,
+    enabled: true, // Ensure enabled is set when speed ramping occurs
+    currentSpeed: event.detail.speed
+  };
+  console.log('📊 Updated speedRampState:', speedRampState);
 }
 
 // Function to get markers from AudioTimeline
@@ -37,6 +57,13 @@ function updateAudioMarkers() {
       // Combine all markers
       audioMarkers = [...transientMarkers, ...userMarkers];
       console.log(`🎯 Updated audio markers: ${audioMarkers.length} total`);
+      
+      // Also sync speed ramp state
+      if (audioTimelineComponent.getSpeedRampState) {
+        const currentSpeedState = audioTimelineComponent.getSpeedRampState();
+        speedRampState = { ...speedRampState, ...currentSpeedState };
+        console.log('🔄 Synced speed ramp state:', speedRampState);
+      }
     } catch (error) {
       console.warn('⚠️ Could not get markers from AudioTimeline:', error);
       audioMarkers = [];
@@ -157,6 +184,7 @@ $effect(() => {
         bind:projectName={projectName}
         on:audiostate={handleAudioState}
         on:markersupdate={updateAudioMarkers}
+        on:speedramp={handleSpeedRamp}
       />
 
       <!-- Video Editor Section -->
@@ -167,6 +195,7 @@ $effect(() => {
           currentTime={audioState.currentTime}
           duration={audioState.duration}
           audioMarkers={audioMarkers}
+          speedRampState={speedRampState}
         />
       {/if}
     </div>

@@ -6,7 +6,8 @@
     currentVideo = null,
     playing = false,
     savedPositions = {},
-    getPreloadedVideo = null // Function to get preloaded video elements
+    getPreloadedVideo = null, // Function to get preloaded video elements
+    playbackRate = 1.0 // Video playback speed
   } = $props();
   
   // Dual video element system for seamless switching
@@ -31,6 +32,24 @@
   // Get the currently active video element using derived state
   let activeVideoElement = $derived(currentActiveVideo === 'primary' ? primaryVideo : secondaryVideo);
   let inactiveVideoElement = $derived(currentActiveVideo === 'primary' ? secondaryVideo : primaryVideo);
+  
+  // Export function to set playback rate (called from VideoEditor)
+  export function setPlaybackRate(rate) {
+    if (primaryVideo) {
+      primaryVideo.playbackRate = rate;
+    }
+    if (secondaryVideo) {
+      secondaryVideo.playbackRate = rate;
+    }
+    console.log('🎥 Set video playback rate to:', rate);
+  }
+  
+  // Effect to handle playbackRate prop changes
+  $effect(() => {
+    if (playbackRate && (primaryVideo || secondaryVideo)) {
+      setPlaybackRate(playbackRate);
+    }
+  });
   
   // Effect to handle video changes - SIMPLIFIED
   $effect(() => {
