@@ -4,46 +4,48 @@
   import Markers from './Markers.svelte';
   import ffmpegService from './ffmpegService.js';
 
-  export let audioUrl = '';
-
-
+  // Props using Svelte 5 syntax
+  let {
+    audioUrl = '',
+    isPlaying = false,
+    currentTime = 0,
+    duration = 0,
+    audioMarkers = [] // Real markers from AudioTimeline
+  } = $props();
   
-  // Video management state
-  let videos = [];
-  let currentVideoIndex = 0;
-  let currentVideo = null;
-  let savedPositions = {};
-  let videoPlayerComponent;
+  // Video management state using Svelte 5 runes
+  let videos = $state([]);
+  let currentVideoIndex = $state(0);
+  let currentVideo = $state(null);
+  let savedPositions = $state({});
+  let videoPlayerComponent = $state();
   
   // Video preloading for seamless switching
-  let preloadedVideos = new Map(); // Map of video IDs to preloaded video elements
-  let preloadQueue = [];
+  let preloadedVideos = $state(new Map()); // Map of video IDs to preloaded video elements
+  let preloadQueue = $state([]);
   const MAX_PRELOADED = 3; // Maximum number of videos to keep preloaded
   
-  // Audio synchronization - these will be passed from parent
-  export let isPlaying = false;
-  export let currentTime = 0;
-  export let duration = 0;
-  export let audioMarkers = []; // Real markers from AudioTimeline
-  let markers = [];
-  let markersPerShot = 4; // Default value from task list
-  let lastMarkerIndex = -1;
-  let markerCount = 0;
-  let lastSwitchTime = 0; // Throttle switching
-  let minSwitchInterval = 500; // Minimum 500ms between switches
+  // Audio synchronization state
+  let markers = $state([]);
+  let markersPerShot = $state(4); // Default value from task list
+  let lastMarkerIndex = $state(-1);
+  let markerCount = $state(0);
+  let lastSwitchTime = $state(0); // Throttle switching
+  let minSwitchInterval = $state(500); // Minimum 500ms between switches
   
   // UI state
-  let isReorderingMode = false;
-  let draggedIndex = null;
-  let insertionIndex = null;
-  let showInsertionInterface = false;
-  let ffmpegLoaded = false;
-  let ffmpegLoading = false;
+  let isReorderingMode = $state(false);
+  let draggedIndex = $state(null);
+  let insertionIndex = $state(null);
+  let showInsertionInterface = $state(false);
+  let ffmpegLoaded = $state(false);
+  let ffmpegLoading = $state(false);
 
   // File input reference
-  let videoFileInput;
+  let videoFileInput = $state();
   
-  $: currentVideo = videos.length > 0 ? videos[currentVideoIndex] : null;
+  // Derived state for current video
+  let currentVideoComputed = $derived(videos.length > 0 ? videos[currentVideoIndex] : null);
   
   // Load beat markers from external source (placeholder for now)
   onMount(() => {
@@ -102,19 +104,31 @@
   
   // No need to load audio - we sync with parent AudioTimeline
   
-  // Watch for audio time changes and handle marker-driven switching
-  $: if (isPlaying && markers.length > 0 && videos.length > 1) {
-    checkMarkerSwitching(currentTime);
-  }
+  // Watch for audio time changes and handle marker-driven switching (throttled)
+  let lastMarkerCheckTime = 0; // NOT reactive - regular variable
+  let lastCheckedTime = -1; // NOT reactive - regular variable
+  $effect(() => {
+    if (isPlaying && markers.length > 0 && videos.length > 1) {
+      const now = Date.now();
+      // Throttle marker checking and avoid checking the same time twice
+      if (now - lastMarkerCheckTime > 100 && currentTime !== lastCheckedTime) {
+        lastMarkerCheckTime = now;
+        lastCheckedTime = currentTime;
+        checkMarkerSwitching(currentTime);
+      }
+    }
+  });
   
   // Also watch for currentVideoIndex changes to update the active video
-  $: if (videos.length > 0 && currentVideoIndex >= 0 && currentVideoIndex < videos.length) {
-    const newVideo = videos[currentVideoIndex];
-    console.log(`🎬 Current video index changed to: ${currentVideoIndex} (${newVideo?.name})`);
-    
-    // Force update the currentVideo reactive variable
-    currentVideo = newVideo;
-  }
+  $effect(() => {
+    if (videos.length > 0 && currentVideoIndex >= 0 && currentVideoIndex < videos.length) {
+      const newVideo = videos[currentVideoIndex];
+      console.log(`🎬 Current video index changed to: ${currentVideoIndex} (${newVideo?.name})`);
+      
+      // Force update the currentVideo reactive variable
+      currentVideo = newVideo;
+    }
+  });
   
   // Audio sync is handled by parent AudioTimeline component
   
@@ -152,10 +166,14 @@
     console.log(`🔄 Reset marker counting - markersPerShot: ${markersPerShot}`);
   }
   
-  // Watch for changes in audioMarkers and reload
-  $: if (audioMarkers !== undefined) {
-    loadMarkers();
-  }
+  // Watch for changes in audioMarkers and reload (with dependency check to prevent loops)
+  let lastAudioMarkersLength = 0; // NOT reactive - regular variable
+  $effect(() => {
+    if (audioMarkers !== undefined && audioMarkers.length !== lastAudioMarkersLength) {
+      lastAudioMarkersLength = audioMarkers.length;
+      loadMarkers();
+    }
+  });
   
   function checkMarkerSwitching(time) {
     // State validation

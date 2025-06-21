@@ -1,20 +1,26 @@
 <script>
   import { createEventDispatcher } from 'svelte';
   
-  export let show = false;
-  export let region = null;
-  export let projectName = 'Untitled Project';
+  // Props using Svelte 5 syntax
+  let {
+    show = false,
+    region = null,
+    projectName = 'Untitled Project'
+  } = $props();
   
   const dispatch = createEventDispatcher();
   
-  let exportFormat = 'mp3';
-  let exportQuality = 'high';
-  let exportName = '';
+  let exportFormat = $state('mp3');
+  let exportQuality = $state('high');
+  let exportName = $state('');
   
-  $: if (region && region.id) {
-    // Generate a default export name based on project and region
-    exportName = `${projectName.replace(/\s+/g, '-').toLowerCase()}-region-${region.id.substring(0, 6)}`;
-  }
+  // Effect to generate export name when region changes
+  $effect(() => {
+    if (region && region.id) {
+      // Generate a default export name based on project and region
+      exportName = `${projectName.replace(/\s+/g, '-').toLowerCase()}-region-${region.id.substring(0, 6)}`;
+    }
+  });
   
   function closeDialog() {
     show = false;

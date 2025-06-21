@@ -1,19 +1,22 @@
 <script>
   import { onMount, onDestroy } from 'svelte';
   
-  export let audioUrl = null;
-  export let height = 80;
-  export let barWidth = 2;
-  export let barGap = 1;
-  export let barColor = '#00b8a9';
+  // Props using Svelte 5 syntax
+  let {
+    audioUrl = null,
+    height = 80,
+    barWidth = 2,
+    barGap = 1,
+    barColor = '#00b8a9'
+  } = $props();
   
-  let canvas;
-  let audioContext;
-  let analyser;
-  let source;
-  let audio;
-  let animationId;
-  let isPlaying = false;
+  let canvas = $state();
+  let audioContext = $state();
+  let analyser = $state();
+  let source = $state();
+  let audio = $state();
+  let animationId = $state();
+  let isPlaying = $state(false);
   
   onMount(() => {
     if (!canvas) return;
@@ -134,7 +137,9 @@
   }
   
   // Update audio URL when prop changes
-  $: {
+  // DISABLED - this effect causes infinite loops
+  /*
+  $effect(() => {
     if (audioUrl && canvas) {
       if (source) {
         source.disconnect();
@@ -145,7 +150,8 @@
       }
       loadAudio(audioUrl);
     }
-  }
+  });
+  */
 </script>
 
 <style>

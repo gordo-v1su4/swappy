@@ -1,25 +1,31 @@
 <script>
   import { onMount, createEventDispatcher } from 'svelte';
 
-
-  export let markers = [];
-  export let currentTime = 0;
-  export let duration = 0;
-  export let playing = false;
+  // Props using Svelte 5 syntax
+  let {
+    markers = [],
+    currentTime = 0,
+    duration = 0,
+    playing = false
+  } = $props();
 
   const dispatch = createEventDispatcher();
-  let container;
-  let markerElements = [];
+  let container = $state();
+  let markerElements = $state([]);
 
-  // Update marker positions when markers or duration changes
-  $: if (container && markers && duration) {
-    updateMarkerPositions();
-  }
+  // Effect to update marker positions when markers or duration changes
+  $effect(() => {
+    if (container && markers && duration) {
+      updateMarkerPositions();
+    }
+  });
 
-  // Check for marker hits when currentTime changes
-  $: if (playing && markers.length > 0) {
-    checkMarkerHit(currentTime);
-  }
+  // Effect to check for marker hits when currentTime changes
+  $effect(() => {
+    if (playing && markers.length > 0) {
+      checkMarkerHit(currentTime);
+    }
+  });
   
   function updateMarkerPositions() {
     markerElements = markers.map(time => {

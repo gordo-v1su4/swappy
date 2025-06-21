@@ -2,11 +2,11 @@
   import { createEventDispatcher } from 'svelte';
   
   // Props
-  export let maxFiles = 5;
+  let { maxFiles = 5 } = $props();
   
-  // Local state
-  let audioFiles = [];
-  let selectedFile = null;
+  // Local state using Svelte 5 runes
+  let audioFiles = $state([]);
+  let selectedFile = $state(null);
   const dispatch = createEventDispatcher();
   
   // Methods

@@ -8,45 +8,47 @@
   import ExportDialog from './ExportDialog.svelte';
   import AudioVisualizer from './AudioVisualizer.svelte';
   
-  // Props
-  export let audioUrl = null;
-  export let height = 128;
-  export let waveColor = 'rgba(0, 184, 169, 0.3)';
-  export let progressColor = 'rgba(0, 184, 169, 0.7)';
-  export let cursorColor = '#ccff00';
-  export let cursorWidth = 2;
-  export let projectName = 'Untitled Project';
+  // Props using Svelte 5 syntax
+  let {
+    audioUrl = null,
+    height = 128,
+    waveColor = 'rgba(0, 184, 169, 0.3)',
+    progressColor = 'rgba(0, 184, 169, 0.7)',
+    cursorColor = '#ccff00',
+    cursorWidth = 2,
+    projectName = $bindable('Untitled Project')
+  } = $props();
   
-  // Local state
-  let wavesurfer;
-  let regionsPlugin;
-  let container;
-  let timelineContainer;
-  let isPlaying = false;
-  let duration = 0;
-  let currentTime = 0;
-  let volume = 1;
-  let zoom = 1; // Start with minimum zoom to ensure entire track fits
+  // Local state using Svelte 5 runes
+  let wavesurfer = $state();
+  let regionsPlugin = $state();
+  let container = $state();
+  let timelineContainer = $state();
+  let isPlaying = $state(false);
+  let duration = $state(0);
+  let currentTime = $state(0);
+  let volume = $state(1);
+  let zoom = $state(1); // Start with minimum zoom to ensure entire track fits
   // Properties for regions and markers
-  let regions = [];
-  let markers = [];
-  let activeRegion = null;
-  let isLoaded = false;
-  let isAnalyzing = false;
-  let songStructure = [];
-  let showStructureOverlay = false;
-  let markerName = '';
-  let showExportDialog = false;
+  let regions = $state([]);
+  let markers = $state([]);
+  let activeRegion = $state(null);
+  let isLoaded = $state(false);
+  let isAnalyzing = $state(false);
+  let songStructure = $state([]);
+  let showStructureOverlay = $state(false);
+  let markerName = $state('');
+  let showExportDialog = $state(false);
   
   // Transient detection variables
-  let isDetectingTransients = false;
-  let transientDensity = 50; // Default value, range 0-100
-  let transientRandomness = 30; // Default value, range 0-100
-  let transientSensitivity = 70; // How sensitive detection is, range 0-100
-  let transientMinSpacing = 0.5; // Minimum time (in seconds) between transients
-  let transientMarkers = []; // Store transient markers separately
-  let isTransientHit = false; // Indicator for transient detection light
-  let transientHitTimeout = null; // Timeout for turning off the hit indicator
+  let isDetectingTransients = $state(false);
+  let transientDensity = $state(50); // Default value, range 0-100
+  let transientRandomness = $state(30); // Default value, range 0-100
+  let transientSensitivity = $state(70); // How sensitive detection is, range 0-100
+  let transientMinSpacing = $state(0.5); // Minimum time (in seconds) between transients
+  let transientMarkers = $state([]); // Store transient markers separately
+  let isTransientHit = $state(false); // Indicator for transient detection light
+  let transientHitTimeout = $state(null); // Timeout for turning off the hit indicator
   
   // Generate unique shades of blue and purple for markers
   function generateMarkerColor(index) {
@@ -71,7 +73,7 @@
   const timelineId = `timeline-${Math.random().toString(36).substring(2, 9)}`;
   
   // Project title functionality from AudioEditor
-  let isEditingTitle = false;
+  let isEditingTitle = $state(false);
   
   // Toggle project title editing
   function toggleTitleEdit() {
@@ -153,14 +155,20 @@
       }
     });
     
+    // Throttle audioprocess events to prevent excessive dispatching
+    let lastAudioprocessTime = 0;
     wavesurfer.on('audioprocess', () => {
-      currentTime = wavesurfer.getCurrentTime();
+      const now = Date.now();
+      if (now - lastAudioprocessTime > 50) { // Throttle to 20 FPS max
+        lastAudioprocessTime = now;
+        currentTime = wavesurfer.getCurrentTime();
 
-      // Dispatch time update
-      dispatch('audiostate', { isPlaying, currentTime, duration });
+        // Dispatch time update
+        dispatch('audiostate', { isPlaying, currentTime, duration });
 
-      // Check if we're hitting any transient markers
-      checkTransientHit(currentTime);
+        // Check if we're hitting any transient markers
+        checkTransientHit(currentTime);
+      }
     });
 
     wavesurfer.on('play', () => {
@@ -737,12 +745,14 @@
     }
   }
   
-  // Update audio URL when prop changes
-  $: {
-    if (wavesurfer && audioUrl) {
+  // Update audio URL when prop changes (with duplicate prevention)
+  let lastLoadedUrl = null; // NOT reactive - regular variable
+  $effect(() => {
+    if (wavesurfer && audioUrl && audioUrl !== lastLoadedUrl) {
+      lastLoadedUrl = audioUrl;
       loadAudio(audioUrl);
     }
-  }
+  });
   
   // Detect transients in audio file
   async function detectTransients() {
@@ -913,13 +923,30 @@
     }));
   }
   
-  // Dispatch markers update event when markers change
-  $: if (transientMarkers.length > 0 || markers.length > 0) {
-    dispatch('markersupdate', {
-      transientMarkers: getTransientMarkers(),
-      userMarkers: getUserMarkers()
-    });
-  }
+  // Dispatch markers update event when markers change (with throttling to prevent loops)
+  let lastMarkerDispatchTime = 0; // NOT reactive - regular variable
+  let lastTransientCount = 0; // NOT reactive - regular variable  
+  let lastUserMarkersCount = 0; // NOT reactive - regular variable
+  $effect(() => {
+    const currentTransientCount = transientMarkers.length;
+    const currentUserMarkersCount = markers.length;
+    const now = Date.now();
+    
+    // Only dispatch if counts actually changed and enough time has passed
+    if ((currentTransientCount !== lastTransientCount || currentUserMarkersCount !== lastUserMarkersCount) 
+        && (now - lastMarkerDispatchTime > 200)) {
+      lastTransientCount = currentTransientCount;
+      lastUserMarkersCount = currentUserMarkersCount;
+      lastMarkerDispatchTime = now;
+      
+      if (currentTransientCount > 0 || currentUserMarkersCount > 0) {
+        dispatch('markersupdate', {
+          transientMarkers: getTransientMarkers(),
+          userMarkers: getUserMarkers()
+        });
+      }
+    }
+  });
 </script>
 
 <style>

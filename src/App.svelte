@@ -1,22 +1,22 @@
 <script>
-import { onMount } from 'svelte';
 import AudioTimeline from './AudioTimeline.svelte';
 import AudioFileManager from './AudioFileManager.svelte';
 import VideoEditor from './VideoEditor.svelte';
 
-let selectedAudioUrl = null;
-let projectName = 'Untitled Project';
+// Svelte 5 runes for reactive state
+let selectedAudioUrl = $state(null);
+let projectName = $state('Untitled Project');
 
 // Audio state for video synchronization
-let audioState = {
+let audioState = $state({
   isPlaying: false,
   currentTime: 0,
   duration: 0
-};
+});
 
 // Audio markers from AudioTimeline
-let audioMarkers = [];
-let audioTimelineComponent;
+let audioMarkers = $state([]);
+let audioTimelineComponent = $state();
 
 function handleFileSelect(event) {
   selectedAudioUrl = event.detail.url;
@@ -44,13 +44,16 @@ function updateAudioMarkers() {
   }
 }
 
-// Update markers periodically when audio is loaded
-$: if (selectedAudioUrl && audioTimelineComponent) {
-  updateAudioMarkers();
-}
-
-onMount(() => {
-  // Initialize any needed functionality here
+// Svelte 5 effect to update markers when dependencies change (throttled to prevent loops)
+let lastUpdateTime = 0; // NOT reactive - regular variable
+$effect(() => {
+  if (selectedAudioUrl && audioTimelineComponent) {
+    const now = Date.now();
+    if (now - lastUpdateTime > 100) { // Throttle updates to prevent infinite loops
+      lastUpdateTime = now;
+      updateAudioMarkers();
+    }
+  }
 });
 </script>
 

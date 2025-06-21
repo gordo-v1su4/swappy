@@ -1,27 +1,33 @@
 <script>
   import { onMount, onDestroy, createEventDispatcher } from 'svelte';
   
-  export let currentVideo = null;
-  export let playing = false;
-  export let savedPositions = {};
-  export let getPreloadedVideo = null; // Function to get preloaded video elements
+  // Props using Svelte 5 syntax
+  let {
+    currentVideo = null,
+    playing = false,
+    savedPositions = {},
+    getPreloadedVideo = null // Function to get preloaded video elements
+  } = $props();
   
   // Dual video element system for seamless switching
-  let primaryVideo;
-  let secondaryVideo;
-  let currentActiveVideo = 'primary'; // 'primary' or 'secondary'
-  let lastSavedPosition = -1;
-  let wasPlaying = false;
-  let currentVideoId = null;
+  let primaryVideo = $state();
+  let secondaryVideo = $state();
+  let currentActiveVideo = $state('primary'); // 'primary' or 'secondary'
+  let lastSavedPosition = $state(-1);
+  let wasPlaying = $state(false);
+  let currentVideoId = $state(null);
   const dispatch = createEventDispatcher();
   
-  // Get the currently active video element
-  $: activeVideoElement = currentActiveVideo === 'primary' ? primaryVideo : secondaryVideo;
-  $: inactiveVideoElement = currentActiveVideo === 'primary' ? secondaryVideo : primaryVideo;
+  // Get the currently active video element using derived state
+  let activeVideoElement = $derived(currentActiveVideo === 'primary' ? primaryVideo : secondaryVideo);
+  let inactiveVideoElement = $derived(currentActiveVideo === 'primary' ? secondaryVideo : primaryVideo);
   
-  $: if (currentVideo && currentVideo.id !== currentVideoId && primaryVideo) {
-    handleVideoChange(currentVideo);
-  }
+  // Effect to handle video changes
+  $effect(() => {
+    if (currentVideo && currentVideo.id !== currentVideoId && primaryVideo) {
+      handleVideoChange(currentVideo);
+    }
+  });
   
   async function handleVideoChange(video) {
     if (!video || !video.url) {
@@ -87,8 +93,16 @@
         
         // Resume playback if it was playing before
         if (wasCurrentlyPlaying && playing) {
-          await primaryVideo.play();
-          console.log('▶️ Primary video playback resumed');
+          try {
+            await primaryVideo.play();
+            console.log('▶️ Primary video playback resumed');
+          } catch (playError) {
+            if (playError.name === 'AbortError') {
+              console.log('🔄 Primary video play was interrupted by new load (normal during switching)');
+            } else {
+              throw playError; // Re-throw other errors
+            }
+          }
         }
         
         console.log('✅ Primary-only video switch completed');
@@ -147,7 +161,15 @@
         
         // If video was playing, start the new active video immediately
         if (wasCurrentlyPlaying && playing) {
-          await activeVideoElement.play();
+          try {
+            await activeVideoElement.play();
+          } catch (playError) {
+            if (playError.name === 'AbortError') {
+              console.log('🔄 Seamless video play was interrupted by new load (normal during switching)');
+            } else {
+              throw playError; // Re-throw other errors
+            }
+          }
         }
         
         // Pause the now-inactive video
@@ -210,7 +232,15 @@
         
         // Resume playback if it was playing before
         if (wasCurrentlyPlaying && playing) {
-          await activeVideoElement.play();
+          try {
+            await activeVideoElement.play();
+          } catch (playError) {
+            if (playError.name === 'AbortError') {
+              console.log('🔄 Direct load video play was interrupted by new load (normal during switching)');
+            } else {
+              throw playError; // Re-throw other errors
+            }
+          }
         }
         
         // Pause the now-inactive video
@@ -227,9 +257,12 @@
     }
   }
   
-  $: if (activeVideoElement && playing !== undefined) {
-    handlePlayStateChange(playing);
-  }
+  // Effect to handle play state changes
+  $effect(() => {
+    if (activeVideoElement && playing !== undefined) {
+      handlePlayStateChange(playing);
+    }
+  });
   
   async function handlePlayStateChange(shouldPlay) {
     if (!activeVideoElement || !currentVideo) return;
@@ -238,9 +271,17 @@
       if (shouldPlay && !wasPlaying) {
         // Validate video is ready before playing
         if (activeVideoElement.readyState >= 2) { // HAVE_CURRENT_DATA
-          await activeVideoElement.play();
-          wasPlaying = true;
-          console.log('▶️ Video playback started');
+          try {
+            await activeVideoElement.play();
+            wasPlaying = true;
+            console.log('▶️ Video playback started');
+          } catch (playError) {
+            if (playError.name === 'AbortError') {
+              console.log('🔄 Play request was interrupted by new load (this is normal during video switching)');
+              return; // Don't treat this as an error
+            }
+            throw playError; // Re-throw other errors
+          }
         } else {
           console.warn('⚠️ Video not ready for playback, waiting...');
           // Wait for video to be ready
@@ -251,9 +292,17 @@
             };
             activeVideoElement.addEventListener('canplay', handleCanPlay);
           });
-          await activeVideoElement.play();
-          wasPlaying = true;
-          console.log('▶️ Video playback started (after waiting)');
+          try {
+            await activeVideoElement.play();
+            wasPlaying = true;
+            console.log('▶️ Video playback started (after waiting)');
+          } catch (playError) {
+            if (playError.name === 'AbortError') {
+              console.log('🔄 Play request was interrupted by new load (this is normal during video switching)');
+              return; // Don't treat this as an error
+            }
+            throw playError; // Re-throw other errors
+          }
         }
       } else if (!shouldPlay && wasPlaying) {
         // Pause and save position
