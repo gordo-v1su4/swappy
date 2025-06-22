@@ -253,7 +253,7 @@ function togglePanel() {
     </div>
   </div>
   
-  <div class="app-layout"> {/* Changed from two-column to app-layout */}
+  <div class="app-layout"> <!-- Was two-column, now app-layout -->
     <div class="sidebar">
       <AudioFileManager on:select={handleFileSelect} />
     </div>

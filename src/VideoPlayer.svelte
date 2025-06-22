@@ -6,16 +6,7 @@
     currentVideo = null,
     playing = false,
     savedPositions = {},
-    getPreloadedVideo = null, // Function to get preloaded video elements
-    playbackRate = 1.0 // Video playback speed
-  } = $props();
-  
-  // Props using Svelte 5 syntax
-  let {
-    currentVideo = null,
-    playing = false,
-    savedPositions = {},
-    // getPreloadedVideo = null, // Simplified: Not using preloading for now
+    // getPreloadedVideo = null, // This was from the old 2-video system, can be removed if not used by WebGL version
     playbackRate = 1.0,
     filter = 'none' // Added filter prop
   } = $props();
