@@ -170,6 +170,7 @@ function togglePanel() {
     border-left: 1px solid #333;
     transition: width 0.3s ease;
     overflow: hidden;
+    border: 3px solid red !important; /* TEMPORARY DEBUGGING BORDER */
   }
 
   .filter-panel.collapsed {
@@ -253,6 +254,7 @@ function togglePanel() {
     </div>
   </div>
   
+  <div>DEBUG MARKER APP LAYOUT START</div>
   <div class="app-layout"> <!-- Was two-column, now app-layout -->
     <div class="sidebar">
       <AudioFileManager on:select={handleFileSelect} />
@@ -283,6 +285,7 @@ function togglePanel() {
     </div>
 
     <div class="filter-panel" class:collapsed={isPanelCollapsed}>
+      <div>DEBUG MARKER FILTER PANEL START</div>
       <div class="panel-header">
         {#if !isPanelCollapsed}
           <h3 class="panel-title">Filter Controls</h3>
