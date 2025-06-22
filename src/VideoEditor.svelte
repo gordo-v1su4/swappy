@@ -11,7 +11,8 @@
     currentTime = 0,
     duration = 0,
     audioMarkers = [], // Real markers from AudioTimeline
-    speedRampState = { enabled: false, currentSpeed: 1.0 } // Speed ramping state from AudioTimeline
+    speedRampState = { enabled: false, currentSpeed: 1.0 }, // Speed ramping state from AudioTimeline
+    currentFilter = 'none' // Added prop for current filter
   } = $props();
   
   // Video management state using Svelte 5 runes
@@ -972,6 +973,7 @@ function getPreloadedVideo(videoId) {
       {savedPositions}
       {getPreloadedVideo}
       playbackRate={currentVideoSpeed}
+      filter={currentFilter} /* Pass filter to VideoPlayer */
       on:saveposition={handleVideoPositionSave}
       on:videoerror={handleVideoError}
     />

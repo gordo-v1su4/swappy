@@ -6,6 +6,8 @@ import VideoEditor from './VideoEditor.svelte';
 // Svelte 5 runes for reactive state
 let selectedAudioUrl = $state(null);
 let projectName = $state('Untitled Project');
+let isPanelCollapsed = $state(false); // State for panel collapse
+let selectedFilter = $state('none'); // State for the selected filter
 
 // Audio state for video synchronization
 let audioState = $state({
@@ -82,6 +84,10 @@ $effect(() => {
     }
   }
 });
+
+function togglePanel() {
+  isPanelCollapsed = !isPanelCollapsed;
+}
 </script>
 
 <style>
@@ -143,9 +149,9 @@ $effect(() => {
   
 
   
-  .two-column {
+  .app-layout { /* Changed from two-column to app-layout */
     display: grid;
-    grid-template-columns: 300px 1fr;
+    grid-template-columns: 300px 1fr auto; /* Added auto for the new panel */
     gap: 20px;
     width: 100%;
     max-width: 100%;
@@ -156,11 +162,86 @@ $effect(() => {
     max-width: 100%;
     overflow-x: hidden;
   }
+
+  .filter-panel {
+    width: 250px; /* Initial width for the panel */
+    background-color: #1e1e1e;
+    padding: 15px;
+    border-left: 1px solid #333;
+    transition: width 0.3s ease;
+    overflow: hidden;
+  }
+
+  .filter-panel.collapsed {
+    width: 40px; /* Width when collapsed */
+  }
+
+  .panel-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 10px;
+  }
+
+  .panel-title {
+    font-size: 16px;
+    font-weight: 500;
+    color: #00b8a9;
+  }
+
+  .toggle-button {
+    background: none;
+    border: none;
+    color: #a1a1aa;
+    font-size: 20px;
+    cursor: pointer;
+  }
   
-  @media (max-width: 768px) {
-    .two-column {
-      grid-template-columns: 1fr;
+  @media (max-width: 992px) { /* Adjusted breakpoint for three columns */
+    .app-layout {
+      grid-template-columns: 1fr; /* Stack main content and panels */
     }
+    .filter-panel {
+      width: 100%; /* Full width on smaller screens */
+      border-left: none;
+      border-top: 1px solid #333;
+    }
+    .filter-panel.collapsed {
+      height: 40px; /* Height when collapsed on smaller screens */
+      width: 100%;
+    }
+  }
+
+  @media (max-width: 768px) {
+    /* Keep stacking for even smaller screens, no specific changes from 992px needed here for layout */
+    /* Sidebar might also stack if not already handled */
+     .app-layout {
+      grid-template-columns: 1fr; /* Ensure stacking */
+    }
+    .sidebar {
+      margin-bottom: 20px; /* Add some space if sidebar stacks above main content */
+    }
+  }
+
+  .filter-group {
+    margin-bottom: 15px;
+  }
+
+  .filter-group label {
+    display: block;
+    margin-bottom: 5px;
+    color: #a1a1aa;
+    font-size: 14px;
+  }
+
+  .filter-select-dropdown {
+    width: 100%;
+    padding: 8px;
+    background-color: #333;
+    color: #e6e6e6;
+    border: 1px solid #555;
+    border-radius: 4px;
+    font-size: 14px;
   }
 </style>
 
@@ -172,7 +253,7 @@ $effect(() => {
     </div>
   </div>
   
-  <div class="two-column">
+  <div class="app-layout"> {/* Changed from two-column to app-layout */}
     <div class="sidebar">
       <AudioFileManager on:select={handleFileSelect} />
     </div>
@@ -196,7 +277,33 @@ $effect(() => {
           duration={audioState.duration}
           audioMarkers={audioMarkers}
           speedRampState={speedRampState}
+          currentFilter={selectedFilter} /* Pass the selected filter */
         />
+      {/if}
+    </div>
+
+    <div class="filter-panel" class:collapsed={isPanelCollapsed}>
+      <div class="panel-header">
+        {#if !isPanelCollapsed}
+          <h3 class="panel-title">Filter Controls</h3>
+        {/if}
+        <button class="toggle-button" on:click={togglePanel} aria-label={isPanelCollapsed ? 'Expand panel' : 'Collapse panel'}>
+          {isPanelCollapsed ? '‹' : '›'}
+        </button>
+      </div>
+      {#if !isPanelCollapsed}
+        <div class="panel-content">
+          <div class="filter-group">
+            <label for="filter-select">Video Filter</label>
+            <select id="filter-select" bind:value={selectedFilter} class="filter-select-dropdown">
+              <option value="none">None</option>
+              <option value="invert">Invert Colors</option>
+              <option value="grayscale">Grayscale</option>
+              <!-- More filters can be added here -->
+            </select>
+          </div>
+          <!-- More filter controls can be added below -->
+        </div>
       {/if}
     </div>
   </div>
