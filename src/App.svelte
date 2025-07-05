@@ -1,13 +1,57 @@
 <script>
 import AudioTimeline from './AudioTimeline.svelte';
-import AudioFileManager from './AudioFileManager.svelte';
+import EnhancedAudioFileManager from './EnhancedAudioFileManager.svelte';
 import VideoEditor from './VideoEditor.svelte';
 
 // Svelte 5 runes for reactive state
 let selectedAudioUrl = $state(null);
+
+// Force clear any stale state on app load
+if (typeof window !== 'undefined') {
+  // Clear any potential stale blob URLs
+  selectedAudioUrl = null;
+  console.log('🧹 Cleared selectedAudioUrl on app initialization');
+}
 let projectName = $state('Untitled Project');
 let isPanelCollapsed = $state(false); // State for panel collapse
 let selectedFilter = $state('none'); // State for the selected filter
+
+// Debug logging for state changes
+$effect(() => {
+  console.log('🔍 App state debug:', {
+    selectedAudioUrl,
+    selectedAudioUrlType: typeof selectedAudioUrl,
+    selectedAudioUrlLength: selectedAudioUrl?.length,
+    masterAudio: masterAudio?.name || 'null',
+    audioStems: audioStems.length,
+    visibleStems: visibleStems.length
+  });
+
+  // Ensure state consistency: if we have selectedAudioUrl but no masterAudio, clear it
+  if (selectedAudioUrl && !masterAudio) {
+    console.warn('⚠️ State inconsistency detected: selectedAudioUrl exists but no masterAudio. Clearing selectedAudioUrl.');
+    selectedAudioUrl = null;
+    return;
+  }
+
+  // Check if selectedAudioUrl is a stale blob URL
+  if (selectedAudioUrl && selectedAudioUrl.startsWith('blob:')) {
+    console.log('🔍 Detected blob URL, checking if it\'s valid...');
+    fetch(selectedAudioUrl, { method: 'HEAD' })
+      .then(response => {
+        if (!response.ok) {
+          console.warn('⚠️ Stale blob URL detected, clearing selectedAudioUrl');
+          selectedAudioUrl = null;
+        } else {
+          console.log('✅ Blob URL is valid');
+        }
+      })
+      .catch(error => {
+        console.warn('⚠️ Error checking blob URL, clearing selectedAudioUrl:', error);
+        selectedAudioUrl = null;
+      });
+  }
+});
 
 // Audio state for video synchronization
 let audioState = $state({
@@ -30,8 +74,52 @@ let speedRampState = $state({
   duration: 0.3
 });
 
-function handleFileSelect(event) {
-  selectedAudioUrl = event.detail.url;
+// Enhanced audio management state
+let masterAudio = $state(null);
+let audioStems = $state([]);
+let visibleStems = $state([]);
+
+function handleFileSelect(data) {
+  selectedAudioUrl = data.url;
+}
+
+// Handle master song selection from enhanced audio file manager
+function handleMasterSelected(masterSong) {
+  masterAudio = masterSong;
+  selectedAudioUrl = masterSong.url;
+  console.log('Master song selected:', masterSong.name);
+}
+
+// Handle stems update from enhanced audio file manager
+function handleStemsUpdated(data) {
+  const { stems, visibleStems: visible } = data;
+  audioStems = stems;
+  visibleStems = visible;
+  console.log('Stems updated:', stems.length, 'visible:', visible.length);
+
+  // Debug: Check if stems have transients
+  stems.forEach(stem => {
+    console.log(`🎵 Stem ${stem.type}: ${stem.transients?.length || 0} transients, included: ${stem.included}, visible: ${stem.visible}`);
+  });
+
+  // You could implement stem mixing logic here
+  // For now, we'll continue using the master track
+}
+
+// Handle transients update from enhanced audio file manager
+function handleTransientsUpdated(data) {
+  console.log('🎯 App.svelte: Transients updated:', data);
+  // Forward to AudioTimeline
+  if (audioTimelineComponent) {
+    if (audioTimelineComponent.handleTransientsUpdated) {
+      console.log('📤 Forwarding transients to AudioTimeline...');
+      audioTimelineComponent.handleTransientsUpdated(data);
+    } else {
+      console.warn('⚠️ AudioTimeline handleTransientsUpdated method not available');
+    }
+  } else {
+    console.warn('⚠️ AudioTimeline component not available');
+  }
 }
 
 function handleAudioState(event) {
@@ -170,7 +258,6 @@ function togglePanel() {
     border-left: 1px solid #333;
     transition: width 0.3s ease;
     overflow: hidden;
-    border: 3px solid red !important; /* TEMPORARY DEBUGGING BORDER */
   }
 
   .filter-panel.collapsed {
@@ -254,10 +341,14 @@ function togglePanel() {
     </div>
   </div>
   
-  <div>DEBUG MARKER APP LAYOUT START</div>
   <div class="app-layout"> <!-- Was two-column, now app-layout -->
     <div class="sidebar">
-      <AudioFileManager on:select={handleFileSelect} />
+      <EnhancedAudioFileManager
+        onSelect={handleFileSelect}
+        onMasterSelected={handleMasterSelected}
+        onStemsUpdated={handleStemsUpdated}
+        onTransientsUpdated={handleTransientsUpdated}
+      />
     </div>
     
     <div class="main-content">
@@ -265,6 +356,9 @@ function togglePanel() {
         bind:this={audioTimelineComponent}
         audioUrl={selectedAudioUrl}
         bind:projectName={projectName}
+        masterAudio={masterAudio}
+        audioStems={audioStems}
+        visibleStems={visibleStems}
         on:audiostate={handleAudioState}
         on:markersupdate={updateAudioMarkers}
         on:speedramp={handleSpeedRamp}
@@ -279,18 +373,17 @@ function togglePanel() {
           duration={audioState.duration}
           audioMarkers={audioMarkers}
           speedRampState={speedRampState}
-          currentFilter={selectedFilter} /* Pass the selected filter */
+          currentFilter={selectedFilter}
         />
       {/if}
     </div>
 
     <div class="filter-panel" class:collapsed={isPanelCollapsed}>
-      <div>DEBUG MARKER FILTER PANEL START</div>
       <div class="panel-header">
         {#if !isPanelCollapsed}
           <h3 class="panel-title">Filter Controls</h3>
         {/if}
-        <button class="toggle-button" on:click={togglePanel} aria-label={isPanelCollapsed ? 'Expand panel' : 'Collapse panel'}>
+        <button class="toggle-button" onclick={togglePanel} aria-label={isPanelCollapsed ? 'Expand panel' : 'Collapse panel'}>
           {isPanelCollapsed ? '‹' : '›'}
         </button>
       </div>

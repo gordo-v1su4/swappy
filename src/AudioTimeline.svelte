@@ -16,7 +16,11 @@
     progressColor = 'rgba(0, 184, 169, 0.7)',
     cursorColor = '#ccff00',
     cursorWidth = 2,
-    projectName = $bindable('Untitled Project')
+    projectName = $bindable('Untitled Project'),
+    // Enhanced audio management props
+    masterAudio = null,
+    audioStems = [],
+    visibleStems = []
   } = $props();
   
   // Local state using Svelte 5 runes
@@ -49,6 +53,10 @@
   let transientMarkers = $state([]); // Store transient markers separately
   let isTransientHit = $state(false); // Indicator for transient detection light
   let transientHitTimeout = $state(null); // Timeout for turning off the hit indicator
+
+  // Combined transients from multiple sources (master + stems)
+  let combinedTransients = $state([]); // Raw transients from all included tracks
+  let filteredTransients = $state([]); // Filtered transients after applying analysis controls
   
   // Speed ramping variables
   let speedRampEnabled = $state(false);
@@ -165,8 +173,9 @@
   }
   
   onMount(() => {
+    console.log('🎵 AudioTimeline onMount called', { audioUrl, container: !!container });
     if (!container) return;
-    
+
     // Create WaveSurfer instance
     wavesurfer = WaveSurfer.create({
       container,
@@ -818,22 +827,101 @@
   // Update audio URL when prop changes (with duplicate prevention)
   let lastLoadedUrl = null; // NOT reactive - regular variable
   $effect(() => {
+    console.log('🎵 AudioTimeline audioUrl effect:', { audioUrl, lastLoadedUrl, hasWavesurfer: !!wavesurfer });
     if (wavesurfer && audioUrl && audioUrl !== lastLoadedUrl) {
+      console.log('🎵 Loading new audio URL:', audioUrl);
       lastLoadedUrl = audioUrl;
       loadAudio(audioUrl);
     }
   });
+
+  // Watch for changes in visible stems and update transient markers
+  $effect(() => {
+    if (wavesurfer && isLoaded && audioStems && visibleStems) {
+      console.log(`🎯 AudioTimeline: Effect triggered - ${audioStems.length} stems, ${visibleStems.length} visible`);
+      audioStems.forEach(stem => {
+        console.log(`🎵 AudioTimeline stem ${stem.type}: ${stem.transients?.length || 0} transients, id: ${stem.id}`);
+      });
+      console.log(`🎯 AudioTimeline: visibleStems:`, visibleStems);
+      // Update transient markers when stems or visibility changes
+      updateTransientMarkersFromStems();
+    }
+  });
   
+  // Combine transients from visible stems
+  function combineStemTransients() {
+    if (!audioStems || audioStems.length === 0) return [];
+
+    const combinedTransients = [];
+    const tolerance = 0.1; // 100ms tolerance for merging nearby transients
+
+    // Get transients from all visible stems
+    audioStems.forEach(stem => {
+      if (visibleStems.includes(stem.id) && stem.transients) {
+        stem.transients.forEach(time => {
+          // Check if this transient is close to an existing one
+          const existing = combinedTransients.find(t => Math.abs(t.time - time) < tolerance);
+          if (existing) {
+            // Merge with existing transient (average the times and combine sources)
+            existing.time = (existing.time + time) / 2;
+            existing.sources.push(stem.type);
+            existing.color = generateCombinedTransientColor(existing.sources);
+          } else {
+            // Add new transient
+            combinedTransients.push({
+              time: time,
+              sources: [stem.type],
+              color: stem.color
+            });
+          }
+        });
+      }
+    });
+
+    // Sort by time
+    return combinedTransients.sort((a, b) => a.time - b.time);
+  }
+
+  // Generate color for combined transients based on source stems
+  function generateCombinedTransientColor(sources) {
+    if (sources.length === 1) {
+      // Single source, use stem color
+      const stemType = audioStems.find(s => s.type === sources[0]);
+      return stemType ? stemType.color : '#00b8a9';
+    } else {
+      // Multiple sources, use a blended color or default
+      return '#ff6b6b'; // Red for combined transients
+    }
+  }
+
+  // Update transient markers when stems change
+  function updateTransientMarkersFromStems() {
+    if (!wavesurfer || !regionsPlugin) return;
+
+    // Clear existing transient markers
+    clearTransientMarkers();
+
+    // Get combined transients from stems
+    const combinedTransients = combineStemTransients();
+
+    // Create markers for combined transients
+    combinedTransients.forEach((transient, index) => {
+      createTransientMarker(transient.time, index, combinedTransients.length, transient.color, transient.sources);
+    });
+
+    console.log(`Updated transient markers: ${combinedTransients.length} combined transients from ${visibleStems.length} visible stems`);
+  }
+
   // Detect transients in audio file
   async function detectTransients() {
     if (!wavesurfer || !isLoaded || isDetectingTransients) return;
-    
+
     isDetectingTransients = true;
-    
+
     try {
       // First clean up any existing transient markers
       clearTransientMarkers();
-      
+
       // Get audio buffer from wavesurfer
       const audioBuffer = wavesurfer.getDecodedData();
       if (!audioBuffer) {
@@ -898,15 +986,97 @@
       isDetectingTransients = false;
     }
   }
-  
+
+  // Handle combined transients from file manager
+  function handleTransientsUpdated(data) {
+    combinedTransients = data.transients || [];
+    console.log(`📥 Received ${combinedTransients.length} combined transients from file manager`);
+    updateTransients();
+  }
+
+  // Update transients display based on current analysis controls
+  function updateTransients() {
+    if (!combinedTransients || combinedTransients.length === 0) {
+      clearTransientMarkers();
+      return;
+    }
+
+    isDetectingTransients = true;
+
+    try {
+      // Apply analysis controls to filter the combined transients
+      const filtered = filterCombinedTransients(combinedTransients);
+
+      // Clear existing transient markers
+      clearTransientMarkers();
+
+      // Create new markers for filtered transients
+      filtered.forEach((transient, index) => {
+        createTransientMarker(transient.time, index, filtered.length, transient.color);
+      });
+
+      filteredTransients = filtered;
+      console.log(`✅ Applied filters: ${filtered.length} transients displayed (from ${combinedTransients.length} total)`);
+
+    } catch (error) {
+      console.error('❌ Error filtering transients:', error);
+    } finally {
+      isDetectingTransients = false;
+    }
+  }
+
+  // Filter combined transients based on analysis controls
+  function filterCombinedTransients(transients) {
+    if (!transients || transients.length === 0) return [];
+
+    let filtered = [...transients];
+
+    // Apply density filter (percentage of transients to keep)
+    const densityFactor = transientDensity / 100;
+    const targetCount = Math.ceil(filtered.length * densityFactor);
+
+    if (targetCount < filtered.length) {
+      // Take evenly spaced transients
+      const step = filtered.length / targetCount;
+      const densityFiltered = [];
+      for (let i = 0; i < targetCount; i++) {
+        const index = Math.floor(i * step);
+        if (index < filtered.length) {
+          densityFiltered.push(filtered[index]);
+        }
+      }
+      filtered = densityFiltered;
+    }
+
+    // Apply randomness filter
+    const randomThreshold = transientRandomness / 100;
+    filtered = filtered.filter(() => Math.random() > randomThreshold);
+
+    // Apply minimum spacing filter
+    const minSpacingSeconds = transientMinSpacing;
+    const spacingFiltered = [];
+    let lastTime = -minSpacingSeconds;
+
+    for (const transient of filtered) {
+      if (transient.time - lastTime >= minSpacingSeconds) {
+        spacingFiltered.push(transient);
+        lastTime = transient.time;
+      }
+    }
+
+    return spacingFiltered;
+  }
+
   // Create a marker for a detected transient
-  function createTransientMarker(time, index, total) {
-    if (!wavesurfer || !regionsPlugin) return;
-    
+  function createTransientMarker(time, index, total, customColor = null, sources = null) {
+    if (!wavesurfer || !regionsPlugin) {
+      return;
+    }
+
     const position = index / total; // Normalized position (0-1) for color gradient
     const markerId = `transient-${Math.random().toString(36).substring(2, 9)}`;
-    const markerColor = generateTransientColor(position);
-    
+    const markerColor = customColor || generateTransientColor(position);
+
     // Create a marker using a region
     const marker = regionsPlugin.addRegion({
       id: markerId,
@@ -915,10 +1085,11 @@
       color: markerColor,
       drag: false,
       resize: false,
-      data: { 
+      data: {
         type: 'transient',
         index: index + 1,
-        timestamp: formatTime(time)
+        timestamp: formatTime(time),
+        sources: sources || ['master'] // Track which stems contributed to this transient
       }
     });
     
@@ -963,12 +1134,13 @@
     if (isHit && !isTransientHit) {
       // Set hit state
       isTransientHit = true;
-      
+      console.log('💡 Transient hit! Light flashing...');
+
       // Clear any existing timeout
       if (transientHitTimeout) {
         clearTimeout(transientHitTimeout);
       }
-      
+
       // Set timeout to turn off the hit indicator after a short time
       transientHitTimeout = setTimeout(() => {
         isTransientHit = false;
@@ -1134,6 +1306,9 @@
       data: marker.data
     }));
   }
+
+  // Export the transients update handler for external access
+  export { handleTransientsUpdated, updateTransients };
   
   // Dispatch markers update event when markers change (with throttling to prevent loops)
   let lastMarkerDispatchTime = 0; // NOT reactive - regular variable
@@ -1675,6 +1850,22 @@
     align-items: center;
     margin-bottom: 15px;
   }
+
+  .transient-info {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+  }
+
+  .transient-count {
+    font-size: 12px;
+    color: #00b8a9;
+    font-weight: 500;
+    background-color: rgba(0, 184, 169, 0.1);
+    padding: 4px 8px;
+    border-radius: 4px;
+    border: 1px solid rgba(0, 184, 169, 0.3);
+  }
   
   .detection-indicator {
     width: 12px;
@@ -1765,14 +1956,14 @@
         type="text"
         class="title-input"
         bind:value={projectName}
-        on:blur={handleTitleBlur}
-        on:keydown={handleTitleKeydown}
+        onblur={handleTitleBlur}
+        onkeydown={handleTitleKeydown}
       />
     {:else}
       <div 
         class="project-title" 
-        on:click={toggleTitleEdit}
-        on:keydown={(e) => e.key === 'Enter' && toggleTitleEdit()}
+        onclick={toggleTitleEdit}
+        onkeydown={(e) => e.key === 'Enter' && toggleTitleEdit()}
         tabindex="0"
         role="button"
         aria-label="Edit project title">
@@ -1792,7 +1983,7 @@
     <div class="transport-controls">
       <button 
         class="button" 
-        on:click={togglePlay}
+        onclick={togglePlay}
         aria-label={isPlaying ? 'Pause' : 'Play'}
       >
         {#if isPlaying}
@@ -1816,7 +2007,7 @@
         max="1"
         step="0.05"
         bind:value={volume}
-        on:input={() => setVolume(volume)}
+        oninput={() => setVolume(volume)}
       />
     </div>
 
@@ -1829,7 +2020,7 @@
         max="20"
         step="0.5"
         bind:value={zoom}
-        on:input={() => setZoom(zoom)}
+        oninput={() => setZoom(zoom)}
       />
     </div>
   </div>
@@ -1837,7 +2028,7 @@
   <div class="region-controls">
     <button
       class="button"
-      on:click={createRegion}
+      onclick={createRegion}
       disabled={!isLoaded}
     >
       Create Region
@@ -1845,7 +2036,7 @@
 
     <button
       class="button"
-      on:click={playRegion}
+      onclick={playRegion}
       disabled={!activeRegion}
     >
       Play Region
@@ -1853,7 +2044,7 @@
 
     <button
       class="button"
-      on:click={deleteRegion}
+      onclick={deleteRegion}
       disabled={!activeRegion}
     >
       Delete Region
@@ -1861,7 +2052,7 @@
 
     <button
       class="button"
-      on:click={exportRegion}
+      onclick={exportRegion}
       disabled={!activeRegion}
     >
       Export Region
@@ -1869,7 +2060,7 @@
     
     <button
       class="button marker-button"
-      on:click={createMarker}
+      onclick={createMarker}
       disabled={!isLoaded}
     >
       Add Timestamp
@@ -1877,7 +2068,7 @@
     
     <button
       class="button analyze-button"
-      on:click={analyzeAudio}
+      onclick={analyzeAudio}
       disabled={!isLoaded || isAnalyzing}
     >
       {#if isAnalyzing}
@@ -1892,11 +2083,14 @@
   <div class="analysis-controls">
     <h2>Analysis</h2>
     
-    <!-- Transient Detection Section -->
+    <!-- Transient Filtering Section -->
     <div class="analysis-section">
       <div class="analysis-header">
-        <h3>Transient Detection</h3>
-        <div class="detection-indicator" class:hit={isTransientHit}></div>
+        <h3>Transient Filtering</h3>
+        <div class="transient-info">
+          <span class="transient-count">{filteredTransients.length} markers</span>
+          <div class="detection-indicator" class:hit={isTransientHit}></div>
+        </div>
       </div>
       
       <div class="analysis-sliders">
@@ -1952,13 +2146,13 @@
       
       <button
         class="button detect-button"
-        on:click={detectTransients}
+        onclick={updateTransients}
         disabled={!isLoaded || isDetectingTransients}
       >
         {#if isDetectingTransients}
-          <span class="loading"></span> Detecting Transients...
+          <span class="loading"></span> Updating Markers...
         {:else}
-          Detect Transients
+          Update Markers
         {/if}
       </button>
     </div>
@@ -1977,7 +2171,7 @@
           <button
             class="button speed-toggle"
             class:enabled={speedRampEnabled}
-            on:click={() => speedRampEnabled = !speedRampEnabled}
+            onclick={() => speedRampEnabled = !speedRampEnabled}
           >
             {speedRampEnabled ? 'Enabled' : 'Disabled'}
           </button>
@@ -2085,7 +2279,7 @@
               <button 
                 class="marker-delete" 
                 aria-label="Delete marker"
-                on:click={() => deleteMarker(marker.id)}
+                onclick={() => deleteMarker(marker.id)}
               >
                 ×
               </button>
@@ -2109,7 +2303,7 @@
             <button 
               class="section-button"
               style="background-color: {section.color};"
-              on:click={() => jumpToSection(section.id)}
+              onclick={() => jumpToSection(section.id)}
             >
               {section.name} ({formatTime(section.start)} - {formatTime(section.end)})
             </button>
