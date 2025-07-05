@@ -55,7 +55,7 @@
   
   // Effect to handle speed ramping changes
   $effect(() => {
-    console.log('🎬 VideoEditor: Speed ramp state changed:', speedRampState);
+    console.log('🎬 VideoEditor: Speed ramp state changed:', $state.snapshot(speedRampState));
     if (speedRampState && speedRampState.currentSpeed !== currentVideoSpeed) {
       console.log('🚀 VideoEditor: Applying speed ramp:', speedRampState.currentSpeed);
       currentVideoSpeed = speedRampState.currentSpeed;

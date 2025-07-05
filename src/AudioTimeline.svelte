@@ -16,7 +16,11 @@
     progressColor = 'rgba(0, 184, 169, 0.7)',
     cursorColor = '#ccff00',
     cursorWidth = 2,
-    projectName = $bindable('Untitled Project')
+    projectName = $bindable('Untitled Project'),
+    // Enhanced audio management props
+    masterAudio = null,
+    audioStems = [],
+    visibleStems = []
   } = $props();
   
   // Local state using Svelte 5 runes
@@ -49,6 +53,10 @@
   let transientMarkers = $state([]); // Store transient markers separately
   let isTransientHit = $state(false); // Indicator for transient detection light
   let transientHitTimeout = $state(null); // Timeout for turning off the hit indicator
+
+  // Combined transients from multiple sources (master + stems)
+  let combinedTransients = $state([]); // Raw transients from all included tracks
+  let filteredTransients = $state([]); // Filtered transients after applying analysis controls
   
   // Speed ramping variables
   let speedRampEnabled = $state(false);
@@ -823,89 +831,167 @@
       loadAudio(audioUrl);
     }
   });
-  
-  // Detect transients in audio file
-  async function detectTransients() {
-    if (!wavesurfer || !isLoaded || isDetectingTransients) return;
-    
-    isDetectingTransients = true;
-    
-    try {
-      // First clean up any existing transient markers
-      clearTransientMarkers();
-      
-      // Get audio buffer from wavesurfer
-      const audioBuffer = wavesurfer.getDecodedData();
-      if (!audioBuffer) {
-        console.error('No audio data available');
-        return;
-      }
-      
-      // Get audio data from the first channel
-      const rawData = audioBuffer.getChannelData(0);
-      const sampleRate = audioBuffer.sampleRate;
-      
-      // Parameter adjustments based on sliders
-      const skipFactor = Math.max(1, Math.round((101 - transientDensity) * 0.2)); // Higher density = fewer samples skipped
-      const randomThreshold = transientRandomness / 100; // Probability of keeping a detected transient
-      const sensitivity = 1 - (transientSensitivity / 100); // Lower value = more sensitive
-      const minSpacingSamples = Math.floor(transientMinSpacing * sampleRate); // Convert seconds to samples
 
-      // Basic transient detection using amplitude differential
-      const transients = [];
-      let prevAvg = 0;
-      let windowSize = Math.floor(sampleRate * 0.01); // 10ms window
-      let lastTransientSample = -minSpacingSamples; // Initialize to ensure first transient is considered
-      
-      // Step through audio data in window-sized chunks
-      for (let i = 0; i < rawData.length; i += windowSize * skipFactor) {
-        // Calculate RMS of current window
-        let sum = 0;
-        for (let j = 0; j < windowSize; j++) {
-          if (i + j < rawData.length) {
-            sum += rawData[i + j] * rawData[i + j];
+  // Watch for changes in visible stems and update transient markers
+  $effect(() => {
+    if (wavesurfer && isLoaded && audioStems && visibleStems) {
+      // Update transient markers when stems or visibility changes
+      updateTransientMarkersFromStems();
+    }
+  });
+  
+  // Combine transients from visible stems
+  function combineStemTransients() {
+    if (!audioStems || audioStems.length === 0) return [];
+
+    const combinedTransients = [];
+    const tolerance = 0.1; // 100ms tolerance for merging nearby transients
+
+    // Get transients from all visible stems
+    audioStems.forEach(stem => {
+      if (visibleStems.includes(stem.id) && stem.transients) {
+        stem.transients.forEach(time => {
+          // Check if this transient is close to an existing one
+          const existing = combinedTransients.find(t => Math.abs(t.time - time) < tolerance);
+          if (existing) {
+            // Merge with existing transient (average the times and combine sources)
+            existing.time = (existing.time + time) / 2;
+            existing.sources.push(stem.type);
+            existing.color = generateCombinedTransientColor(existing.sources);
+          } else {
+            // Add new transient
+            combinedTransients.push({
+              time: time,
+              sources: [stem.type],
+              color: stem.color
+            });
           }
-        }
-        const rms = Math.sqrt(sum / windowSize);
-        
-        // Detect sudden increase in amplitude
-        if (rms > prevAvg * (1 + sensitivity) && rms > 0.01) {
-          // Check if we're far enough from the last detected transient
-          if (i - lastTransientSample >= minSpacingSamples) {
-            // Apply randomness factor
-            if (Math.random() > randomThreshold) {
-              const time = i / sampleRate;
-              if (time > 0 && time < duration) {
-                transients.push(time);
-                lastTransientSample = i; // Update last transient position
-              }
-            }
-          }
-        }
-        prevAvg = (prevAvg + rms) / 2; // Smooth the comparison
+        });
       }
-      
-      console.log(`Detected ${transients.length} transients with density ${transientDensity}, randomness ${transientRandomness}, sensitivity ${transientSensitivity}, min spacing ${transientMinSpacing}s`);
-      
-      // Create markers for detected transients
-      transients.forEach((time, index) => {
-        createTransientMarker(time, index, transients.length);
+    });
+
+    // Sort by time
+    return combinedTransients.sort((a, b) => a.time - b.time);
+  }
+
+  // Generate color for combined transients based on source stems
+  function generateCombinedTransientColor(sources) {
+    if (sources.length === 1) {
+      // Single source, use stem color
+      const stemType = audioStems.find(s => s.type === sources[0]);
+      return stemType ? stemType.color : '#00b8a9';
+    } else {
+      // Multiple sources, use a blended color or default
+      return '#ff6b6b'; // Red for combined transients
+    }
+  }
+
+  // Update transient markers when stems change
+  function updateTransientMarkersFromStems() {
+    if (!wavesurfer || !regionsPlugin) return;
+
+    // Clear existing transient markers
+    clearTransientMarkers();
+
+    // Get combined transients from stems
+    const combinedTransients = combineStemTransients();
+
+    // Create markers for combined transients
+    combinedTransients.forEach((transient, index) => {
+      createTransientMarker(transient.time, index, combinedTransients.length, transient.color, transient.sources);
+    });
+
+    console.log(`Updated transient markers: ${combinedTransients.length} combined transients from ${visibleStems.length} visible stems`);
+  }
+  
+  // Handle combined transients from file manager
+  function handleTransientsUpdated(data) {
+    combinedTransients = data.transients || [];
+    console.log(`📥 Received ${combinedTransients.length} combined transients from file manager`);
+    updateTransients();
+  }
+
+  // Update transients display based on current analysis controls
+  function updateTransients() {
+    if (!combinedTransients || combinedTransients.length === 0) {
+      clearTransientMarkers();
+      return;
+    }
+
+    isDetectingTransients = true;
+
+    try {
+      // Apply analysis controls to filter the combined transients
+      const filtered = filterCombinedTransients(combinedTransients);
+
+      // Clear existing transient markers
+      clearTransientMarkers();
+
+      // Create new markers for filtered transients
+      filtered.forEach((transient, index) => {
+        createTransientMarker(transient.time, index, filtered.length, transient.color);
       });
-      
-    } catch (err) {
-      console.error('Error detecting transients:', err);
+
+      transientMarkers = filtered;
+      filteredTransients = filtered;
+      console.log(`✅ Applied filters: ${filtered.length} transients displayed (from ${combinedTransients.length} total)`);
+
+    } catch (error) {
+      console.error('❌ Error filtering transients:', error);
     } finally {
       isDetectingTransients = false;
     }
   }
-  
+
+  // Filter combined transients based on analysis controls
+  function filterCombinedTransients(transients) {
+    if (!transients || transients.length === 0) return [];
+
+    let filtered = [...transients];
+
+    // Apply density filter (percentage of transients to keep)
+    const densityFactor = transientDensity / 100;
+    const targetCount = Math.ceil(filtered.length * densityFactor);
+
+    if (targetCount < filtered.length) {
+      // Take evenly spaced transients
+      const step = filtered.length / targetCount;
+      const densityFiltered = [];
+      for (let i = 0; i < targetCount; i++) {
+        const index = Math.floor(i * step);
+        if (index < filtered.length) {
+          densityFiltered.push(filtered[index]);
+        }
+      }
+      filtered = densityFiltered;
+    }
+
+    // Apply randomness filter
+    const randomThreshold = transientRandomness / 100;
+    filtered = filtered.filter(() => Math.random() > randomThreshold);
+
+    // Apply minimum spacing filter
+    const minSpacingSeconds = transientMinSpacing;
+    const spacingFiltered = [];
+    let lastTime = -minSpacingSeconds;
+
+    for (const transient of filtered) {
+      if (transient.time - lastTime >= minSpacingSeconds) {
+        spacingFiltered.push(transient);
+        lastTime = transient.time;
+      }
+    }
+
+    return spacingFiltered;
+  }
+
   // Create a marker for a detected transient
-  function createTransientMarker(time, index, total) {
+  function createTransientMarker(time, index, total, customColor = null, sources = null) {
     if (!wavesurfer || !regionsPlugin) return;
     
     const position = index / total; // Normalized position (0-1) for color gradient
     const markerId = `transient-${Math.random().toString(36).substring(2, 9)}`;
-    const markerColor = generateTransientColor(position);
+    const markerColor = customColor || generateTransientColor(position);
     
     // Create a marker using a region
     const marker = regionsPlugin.addRegion({
@@ -918,7 +1004,8 @@
       data: { 
         type: 'transient',
         index: index + 1,
-        timestamp: formatTime(time)
+        timestamp: formatTime(time),
+        sources: sources || ['master'] // Track which stems contributed to this transient
       }
     });
     
@@ -1134,6 +1221,9 @@
       data: marker.data
     }));
   }
+
+  // Export the transients update handler for external access
+  export { handleTransientsUpdated, updateTransients };
   
   // Dispatch markers update event when markers change (with throttling to prevent loops)
   let lastMarkerDispatchTime = 0; // NOT reactive - regular variable
@@ -1890,13 +1980,16 @@
   
   <!-- Analysis Controls -->
   <div class="analysis-controls">
-    <h2>Analysis</h2>
-    
     <!-- Transient Detection Section -->
     <div class="analysis-section">
       <div class="analysis-header">
         <h3>Transient Detection</h3>
-        <div class="detection-indicator" class:hit={isTransientHit}></div>
+        <div class="transient-info">
+          <div class="transient-count glowy-yellow">
+            {transientMarkers.length} Transients
+          </div>
+          <div class="detection-indicator" class:hit={isTransientHit}></div>
+        </div>
       </div>
       
       <div class="analysis-sliders">
@@ -1909,6 +2002,7 @@
             min="1"
             max="100"
             bind:value={transientDensity}
+            onchange={updateTransients}
           />
         </div>
         
@@ -1921,6 +2015,7 @@
             min="0"
             max="100"
             bind:value={transientRandomness}
+            onchange={updateTransients}
           />
         </div>
         
@@ -1933,6 +2028,7 @@
             min="1"
             max="100"
             bind:value={transientSensitivity}
+            onchange={updateTransients}
           />
         </div>
         
@@ -1946,19 +2042,20 @@
             max="2"
             step="0.05"
             bind:value={transientMinSpacing}
+            onchange={updateTransients}
           />
         </div>
       </div>
       
       <button
         class="button detect-button"
-        onclick={detectTransients}
+        onclick={updateTransients}
         disabled={!isLoaded || isDetectingTransients}
       >
         {#if isDetectingTransients}
-          <span class="loading"></span> Detecting Transients...
+          <span class="loading"></span> Applying Filters...
         {:else}
-          Detect Transients
+          Apply Filters
         {/if}
       </button>
     </div>

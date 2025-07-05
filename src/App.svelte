@@ -5,7 +5,35 @@ import VideoEditor from './VideoEditor.svelte';
 
 // Svelte 5 runes for reactive state
 let selectedAudioUrl = $state(null);
+
+// Force clear any stale state on app load
+if (typeof window !== 'undefined') {
+  // Clear any potential stale blob URLs
+  selectedAudioUrl = null;
+  console.log('🧹 Cleared selectedAudioUrl on app initialization');
+}
 let projectName = $state('Untitled Project');
+let isPanelCollapsed = $state(false); // State for panel collapse
+let selectedFilter = $state('none'); // State for the selected filter
+
+// Debug logging for state changes
+$effect(() => {
+  console.log('🔍 App state debug:', {
+    selectedAudioUrl,
+    selectedAudioUrlType: typeof selectedAudioUrl,
+    selectedAudioUrlLength: selectedAudioUrl?.length,
+    masterAudio: masterAudio?.name || 'null',
+    audioStems: audioStems.length,
+    visibleStems: visibleStems.length
+  });
+
+  // Ensure state consistency: if we have selectedAudioUrl but no masterAudio, clear it
+  if (selectedAudioUrl && !masterAudio) {
+    console.warn('⚠️ State inconsistency detected: selectedAudioUrl exists but no masterAudio. Clearing selectedAudioUrl.');
+    selectedAudioUrl = null;
+    return;
+  }
+});
 
 // Audio state for video synchronization
 let audioState = $state({
@@ -28,8 +56,55 @@ let speedRampState = $state({
   duration: 0.3
 });
 
-function handleFileSelect(event) {
-  selectedAudioUrl = event.detail.url;
+// Enhanced audio management state
+let masterAudio = $state(null);
+let audioStems = $state([]);
+let visibleStems = $state([]);
+
+// Handle master song selection from enhanced audio file manager
+function handleMasterSelected(event) {
+  const masterSong = event.detail;
+  masterAudio = masterSong;
+  selectedAudioUrl = masterSong.url;
+  console.log('Master song selected:', masterSong.name);
+}
+
+// Handle stems update from enhanced audio file manager
+function handleStemsUpdated(event) {
+  const { stems, visibleStems: visible } = event.detail;
+  audioStems = stems;
+
+  // Prevent infinite loops by only updating if the array content has changed
+  if (JSON.stringify(visibleStems) !== JSON.stringify(visible)) {
+    visibleStems = visible;
+  }
+  
+  console.log('Stems updated:', stems.length, 'visible:', visible.length);
+
+  // Debug: Check if stems have transients
+  stems.forEach(stem => {
+    console.log(`🎵 Stem ${stem.type}: ${stem.transients?.length || 0} transients, included: ${stem.included}, visible: ${stem.visible}`);
+  });
+
+  // You could implement stem mixing logic here
+  // For now, we'll continue using the master track
+}
+
+// Handle transients update from enhanced audio file manager
+function handleTransientsUpdated(event) {
+  const data = event.detail;
+  console.log('🎯 App.svelte: Transients updated:', data);
+  // Forward to AudioTimeline
+  if (audioTimelineComponent) {
+    if (audioTimelineComponent.handleTransientsUpdated) {
+      console.log('📤 Forwarding transients to AudioTimeline...');
+      audioTimelineComponent.handleTransientsUpdated(data);
+    } else {
+      console.warn('⚠️ AudioTimeline handleTransientsUpdated method not available');
+    }
+  } else {
+    console.warn('⚠️ AudioTimeline component not available');
+  }
 }
 
 function handleAudioState(event) {
@@ -62,7 +137,7 @@ function updateAudioMarkers() {
       if (audioTimelineComponent.getSpeedRampState) {
         const currentSpeedState = audioTimelineComponent.getSpeedRampState();
         speedRampState = { ...speedRampState, ...currentSpeedState };
-        console.log('🔄 Synced speed ramp state:', speedRampState);
+        console.log('🔄 Synced speed ramp state:', $state.snapshot(speedRampState));
       }
     } catch (error) {
       console.warn('⚠️ Could not get markers from AudioTimeline:', error);
@@ -174,7 +249,11 @@ $effect(() => {
   
   <div class="two-column">
     <div class="sidebar">
-      <AudioFileManager on:select={handleFileSelect} />
+      <AudioFileManager
+        on:masterSelected={handleMasterSelected}
+        on:stemsUpdated={handleStemsUpdated}
+        on:transientsUpdated={handleTransientsUpdated}
+      />
     </div>
     
     <div class="main-content">
@@ -182,6 +261,9 @@ $effect(() => {
         bind:this={audioTimelineComponent}
         audioUrl={selectedAudioUrl}
         bind:projectName={projectName}
+        masterAudio={masterAudio}
+        audioStems={audioStems}
+        visibleStems={visibleStems}
         on:audiostate={handleAudioState}
         on:markersupdate={updateAudioMarkers}
         on:speedramp={handleSpeedRamp}
