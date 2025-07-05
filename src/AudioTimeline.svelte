@@ -831,78 +831,6 @@
       loadAudio(audioUrl);
     }
   });
-
-  // Watch for changes in visible stems and update transient markers
-  $effect(() => {
-    if (wavesurfer && isLoaded && audioStems && visibleStems) {
-      // Update transient markers when stems or visibility changes
-      updateTransientMarkersFromStems();
-    }
-  });
-  
-  // Combine transients from visible stems
-  function combineStemTransients() {
-    if (!audioStems || audioStems.length === 0) return [];
-
-    const combinedTransients = [];
-    const tolerance = 0.1; // 100ms tolerance for merging nearby transients
-
-    // Get transients from all visible stems
-    audioStems.forEach(stem => {
-      if (visibleStems.includes(stem.id) && stem.transients) {
-        stem.transients.forEach(time => {
-          // Check if this transient is close to an existing one
-          const existing = combinedTransients.find(t => Math.abs(t.time - time) < tolerance);
-          if (existing) {
-            // Merge with existing transient (average the times and combine sources)
-            existing.time = (existing.time + time) / 2;
-            existing.sources.push(stem.type);
-            existing.color = generateCombinedTransientColor(existing.sources);
-          } else {
-            // Add new transient
-            combinedTransients.push({
-              time: time,
-              sources: [stem.type],
-              color: stem.color
-            });
-          }
-        });
-      }
-    });
-
-    // Sort by time
-    return combinedTransients.sort((a, b) => a.time - b.time);
-  }
-
-  // Generate color for combined transients based on source stems
-  function generateCombinedTransientColor(sources) {
-    if (sources.length === 1) {
-      // Single source, use stem color
-      const stemType = audioStems.find(s => s.type === sources[0]);
-      return stemType ? stemType.color : '#00b8a9';
-    } else {
-      // Multiple sources, use a blended color or default
-      return '#ff6b6b'; // Red for combined transients
-    }
-  }
-
-  // Update transient markers when stems change
-  function updateTransientMarkersFromStems() {
-    if (!wavesurfer || !regionsPlugin) return;
-
-    // Clear existing transient markers
-    clearTransientMarkers();
-
-    // Get combined transients from stems
-    const combinedTransients = combineStemTransients();
-
-    // Create markers for combined transients
-    combinedTransients.forEach((transient, index) => {
-      createTransientMarker(transient.time, index, combinedTransients.length, transient.color, transient.sources);
-    });
-
-    console.log(`Updated transient markers: ${combinedTransients.length} combined transients from ${visibleStems.length} visible stems`);
-  }
   
   // Handle combined transients from file manager
   function handleTransientsUpdated(data) {
@@ -947,42 +875,61 @@
   function filterCombinedTransients(transients) {
     if (!transients || transients.length === 0) return [];
 
-    let filtered = [...transients];
-
-    // Apply density filter (percentage of transients to keep)
-    const densityFactor = transientDensity / 100;
-    const targetCount = Math.ceil(filtered.length * densityFactor);
-
-    if (targetCount < filtered.length) {
-      // Take evenly spaced transients
-      const step = filtered.length / targetCount;
-      const densityFiltered = [];
-      for (let i = 0; i < targetCount; i++) {
-        const index = Math.floor(i * step);
-        if (index < filtered.length) {
-          densityFiltered.push(filtered[index]);
-        }
+    // Group transients by their source stem
+    const transientsByStem = transients.reduce((acc, t) => {
+      const source = t.source || 'master';
+      if (!acc[source]) {
+        acc[source] = [];
       }
-      filtered = densityFiltered;
+      acc[source].push(t);
+      return acc;
+    }, {});
+
+    let filteredTransients = [];
+
+    // Apply filters to each stem group independently
+    for (const source in transientsByStem) {
+      let stemTransients = [...transientsByStem[source]];
+
+      // Apply density filter
+      const densityFactor = transientDensity / 100;
+      const targetCount = Math.ceil(stemTransients.length * densityFactor);
+      if (targetCount < stemTransients.length) {
+        const step = stemTransients.length / targetCount;
+        const densityFiltered = [];
+        for (let i = 0; i < targetCount; i++) {
+          const index = Math.floor(i * step);
+          if (index < stemTransients.length) {
+            densityFiltered.push(stemTransients[index]);
+          }
+        }
+        stemTransients = densityFiltered;
+      }
+
+      // Apply randomness filter
+      const randomThreshold = transientRandomness / 100;
+      stemTransients = stemTransients.filter(() => Math.random() > randomThreshold);
+      
+      // Add the filtered transients for this stem to the final list
+      filteredTransients.push(...stemTransients);
     }
 
-    // Apply randomness filter
-    const randomThreshold = transientRandomness / 100;
-    filtered = filtered.filter(() => Math.random() > randomThreshold);
+    // Sort the final combined list by time
+    filteredTransients.sort((a, b) => a.time - b.time);
 
-    // Apply minimum spacing filter
+    // Apply minimum spacing filter to the final combined list
     const minSpacingSeconds = transientMinSpacing;
-    const spacingFiltered = [];
+    const finalFiltered = [];
     let lastTime = -minSpacingSeconds;
 
-    for (const transient of filtered) {
+    for (const transient of filteredTransients) {
       if (transient.time - lastTime >= minSpacingSeconds) {
-        spacingFiltered.push(transient);
+        finalFiltered.push(transient);
         lastTime = transient.time;
       }
     }
 
-    return spacingFiltered;
+    return finalFiltered;
   }
 
   // Create a marker for a detected transient
@@ -1400,7 +1347,7 @@
     -webkit-appearance: none;
     appearance: none;
     width: 80px;
-    height: 4px;
+    height: 3px;
     border-radius: 2px;
     background: #333;
     outline: none;
@@ -2002,7 +1949,6 @@
             min="1"
             max="100"
             bind:value={transientDensity}
-            onchange={updateTransients}
           />
         </div>
         
@@ -2015,7 +1961,6 @@
             min="0"
             max="100"
             bind:value={transientRandomness}
-            onchange={updateTransients}
           />
         </div>
         
@@ -2028,7 +1973,6 @@
             min="1"
             max="100"
             bind:value={transientSensitivity}
-            onchange={updateTransients}
           />
         </div>
         
@@ -2042,7 +1986,6 @@
             max="2"
             step="0.05"
             bind:value={transientMinSpacing}
-            onchange={updateTransients}
           />
         </div>
       </div>

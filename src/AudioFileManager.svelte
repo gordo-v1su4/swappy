@@ -341,15 +341,12 @@
     for (const file of files) {
       const stemType = targetStemType || inferStemType(file.name);
       const stemConfig = stemTypes.find(t => t.id === stemType);
-
-      if (!stemConfig) {
-        console.error(`No stem config found for type: ${stemType}`);
-        continue;
-      }
+      if (!stemConfig) continue;
 
       const stem = {
         id: generateId(),
         name: file.name,
+        file: file,
         size: file.size,
         type: stemType,
         color: stemConfig.color,
@@ -367,31 +364,30 @@
       } else {
         newStems.push(stem);
       }
-      
-      // Update the UI to show "Analyzing..." immediately
-      projectTree.stems = [...newStems];
+    }
 
-      // Process this file sequentially
-      try {
-        const result = await analyzeAudioForTransients(file, stem.type);
-        const finalStem = newStems.find(s => s.id === stem.id);
-        if (finalStem) {
-          finalStem.transients = result.transients;
-          finalStem.duration = result.duration;
-          finalStem.analyzing = false;
-        }
-      } catch (error) {
-        console.error(`Error analyzing stem ${stem.name}:`, error);
-        const finalStem = newStems.find(s => s.id === stem.id);
-        if (finalStem) {
-          finalStem.analyzing = false;
+    projectTree.stems = newStems;
+
+    for (const stem of projectTree.stems) {
+      if (stem.analyzing && stem.file) {
+        console.log(`Analyzing ${stem.name}...`);
+        try {
+          const result = await analyzeAudioForTransients(stem.file, stem.type);
+          stem.transients = result.transients;
+          stem.duration = result.duration;
+          stem.analyzing = false;
+          stem.file = null;
+          console.log(`Finished analyzing ${stem.name}`);
+        } catch (error) {
+          console.error(`Error analyzing stem ${stem.name}:`, error);
+          stem.analyzing = false;
+          stem.file = null;
         }
       }
-      
-      // Update the UI after each file is processed
-      projectTree.stems = [...newStems];
-      updateCombinedTransients();
     }
+    
+    projectTree.stems = [...projectTree.stems];
+    updateCombinedTransients();
 
     event.target.value = '';
     targetStemType = null;
@@ -708,7 +704,7 @@
             <div class="stem-header">
               <div class="stem-identity">
                 <span class="stem-dot" style="background-color: {stemType.color}"></span>
-                <span class="stem-name">{stemType.name}</span>
+                <span class="stem-name" style={stem ? `color: ${stemType.color}` : ''}>{stemType.name}</span>
               </div>
 
               {#if stem}
@@ -769,8 +765,7 @@
 
               <!-- Compact stem info -->
               <div class="stem-info">
-                <span class="file-name">{stem.name}</span>
-                <span class="transient-count">{stem.transients?.length || 0} transients</span>
+                <span class="stem-name-small">{stem.name}</span>
               </div>
             {/if}
           </div>
@@ -1195,22 +1190,13 @@
     border-top: 1px solid rgba(255, 255, 255, 0.05);
   }
 
-  .stem-info .file-name {
-    font-size: 12px;
-    color: #e6e6e6;
+  .stem-name-small {
+    font-size: 11px;
+    color: #a1a1aa;
     flex: 1;
     margin-right: 8px;
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
-  }
-
-  .stem-info .transient-count {
-    font-size: 10px;
-    color: #888;
-    background-color: #333;
-    padding: 2px 6px;
-    border-radius: 10px;
-    white-space: nowrap;
   }
 </style>

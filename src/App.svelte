@@ -26,13 +26,6 @@ $effect(() => {
     audioStems: audioStems.length,
     visibleStems: visibleStems.length
   });
-
-  // Ensure state consistency: if we have selectedAudioUrl but no masterAudio, clear it
-  if (selectedAudioUrl && !masterAudio) {
-    console.warn('⚠️ State inconsistency detected: selectedAudioUrl exists but no masterAudio. Clearing selectedAudioUrl.');
-    selectedAudioUrl = null;
-    return;
-  }
 });
 
 // Audio state for video synchronization
@@ -71,23 +64,15 @@ function handleMasterSelected(event) {
 
 // Handle stems update from enhanced audio file manager
 function handleStemsUpdated(event) {
-  const { stems, visibleStems: visible } = event.detail;
+  const { stems, visibleStems: newVisibleStems } = event.detail;
   audioStems = stems;
 
   // Prevent infinite loops by only updating if the array content has changed
-  if (JSON.stringify(visibleStems) !== JSON.stringify(visible)) {
-    visibleStems = visible;
+  if (JSON.stringify(visibleStems) !== JSON.stringify(newVisibleStems)) {
+    visibleStems = newVisibleStems;
   }
   
-  console.log('Stems updated:', stems.length, 'visible:', visible.length);
-
-  // Debug: Check if stems have transients
-  stems.forEach(stem => {
-    console.log(`🎵 Stem ${stem.type}: ${stem.transients?.length || 0} transients, included: ${stem.included}, visible: ${stem.visible}`);
-  });
-
-  // You could implement stem mixing logic here
-  // For now, we'll continue using the master track
+  console.log('Stems updated:', stems.length, 'visible:', newVisibleStems.length);
 }
 
 // Handle transients update from enhanced audio file manager
@@ -147,16 +132,16 @@ function updateAudioMarkers() {
 }
 
 // Svelte 5 effect to update markers when dependencies change (throttled to prevent loops)
-let lastUpdateTime = 0; // NOT reactive - regular variable
-$effect(() => {
-  if (selectedAudioUrl && audioTimelineComponent) {
-    const now = Date.now();
-    if (now - lastUpdateTime > 100) { // Throttle updates to prevent infinite loops
-      lastUpdateTime = now;
-      updateAudioMarkers();
-    }
-  }
-});
+// let lastUpdateTime = 0; // NOT reactive - regular variable
+// $effect(() => {
+//   if (selectedAudioUrl && audioTimelineComponent) {
+//     const now = Date.now();
+//     if (now - lastUpdateTime > 100) { // Throttle updates to prevent infinite loops
+//       lastUpdateTime = now;
+//       updateAudioMarkers();
+//     }
+//   }
+// });
 </script>
 
 <style>
