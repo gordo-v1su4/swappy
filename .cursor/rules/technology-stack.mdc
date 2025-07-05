@@ -1,0 +1,273 @@
+---
+description: Technology stack, dependencies, versions, and best practices for Swappy video editing application
+globs: **/*
+alwaysApply: false
+---
+# Technology Stack and Dependencies
+
+## Overview
+
+Swappy is built on a modern web technology stack optimized for real-time audio/video processing in the browser. The application leverages cutting-edge Web APIs and WASM technologies for client-side video editing capabilities.
+
+## Core Framework Stack
+
+### Svelte 5.34.7 (Frontend Framework)
+- **Type**: Modern reactive framework with runes system
+- **Version**: `^5.34.7` (latest stable)
+- **Purpose**: Component-based UI with reactive state management
+- **Key Features**: 
+  - Runes system (`$state`, `$derived`, `$effect`)
+  - Compile-time reactivity
+  - Small bundle size
+  - Excellent developer experience
+
+**Best Practices:**
+```javascript
+// ✅ Good: Use runes for reactive state
+let count = $state(0);
+let doubled = $derived(count * 2);
+$effect(() => console.log('Count changed:', count));
+
+// ❌ Bad: Avoid manual reactivity management
+let count = 0;
+let doubled = count * 2;
+// Manual subscription management needed
+```
+
+### Vite 6.3.5 (Build Tool)
+- **Type**: Fast build tool and dev server
+- **Version**: `^6.3.5` (latest major version)
+- **Purpose**: Development server, bundling, and optimization
+- **Key Features**:
+  - Lightning-fast HMR (Hot Module Replacement)
+  - ES modules by default
+  - Optimized production builds
+  - Plugin ecosystem
+
+**Best Practices:**
+```javascript
+// ✅ Good: Use ES modules consistently
+import { createApp } from 'svelte';
+import App from './App.svelte';
+
+// ❌ Bad: Avoid CommonJS in modern Vite projects
+const { createApp } = require('svelte');
+```
+
+### @sveltejs/vite-plugin-svelte 5.1.0
+- **Type**: Vite plugin for Svelte integration
+- **Version**: `^5.1.0` (compatible with Svelte 5)
+- **Purpose**: Seamless Svelte + Vite integration
+- **Key Features**:
+  - Automatic Svelte compilation
+  - CSS scoping
+  - Preprocessor support
+
+## Audio Processing Stack
+
+### WaveSurfer.js 7.9.5
+- **Type**: Audio waveform visualization and analysis library
+- **Version**: `^7.9.5` (latest stable)
+- **Purpose**: Audio file processing, waveform display, and transient detection
+- **Key Features**:
+  - Real-time waveform rendering
+  - Audio playback control
+  - Marker and region management
+  - Transient detection algorithms
+
+**Best Practices:**
+```javascript
+// ✅ Good: Proper WaveSurfer initialization
+import WaveSurfer from 'wavesurfer.js';
+
+const wavesurfer = WaveSurfer.create({
+  container: '#waveform',
+  waveColor: '#4F4A85',
+  progressColor: '#383351',
+  cursorColor: '#fff',
+  barWidth: 2,
+  barRadius: 3,
+  cursorWidth: 1,
+  height: 200,
+  barGap: 3
+});
+
+// ❌ Bad: Missing error handling
+const wavesurfer = WaveSurfer.create({
+  container: '#waveform'
+  // Missing required configuration
+});
+```
+
+## Video Processing Stack
+
+### @ffmpeg/ffmpeg 0.12.15
+- **Type**: WebAssembly port of FFmpeg
+- **Version**: `^0.12.15` (latest stable)
+- **Purpose**: Browser-based video processing and manipulation
+- **Key Features**:
+  - Video format conversion
+  - Thumbnail generation
+  - Video trimming and concatenation
+  - Codec support
+
+### @ffmpeg/util 0.12.2
+- **Type**: FFmpeg utilities and helpers
+- **Version**: `^0.12.2` (compatible with ffmpeg 0.12.x)
+- **Purpose**: File handling, memory management, and FFmpeg integration
+- **Key Features**:
+  - File system operations
+  - Memory management
+  - Cross-origin resource handling
+
+**Best Practices:**
+```javascript
+// ✅ Good: Proper FFmpeg initialization with error handling
+import { FFmpeg } from '@ffmpeg/ffmpeg';
+import { fetchFile, toBlobURL } from '@ffmpeg/util';
+
+const ffmpeg = new FFmpeg();
+
+try {
+  await ffmpeg.load({
+    coreURL: await toBlobURL(`/ffmpeg/ffmpeg-core.js`, 'text/javascript'),
+    wasmURL: await toBlobURL(`/ffmpeg/ffmpeg-core.wasm`, 'application/wasm'),
+  });
+} catch (error) {
+  console.error('FFmpeg load failed:', error);
+}
+
+// ❌ Bad: Missing error handling and proper resource management
+const ffmpeg = new FFmpeg();
+await ffmpeg.load(); // No error handling
+```
+
+## Browser Requirements and Compatibility
+
+### Required Web APIs
+- **Web Audio API**: For audio processing and analysis
+- **File API**: For file uploads and handling
+- **HTML5 Video**: For video playback
+- **SharedArrayBuffer**: For FFmpeg WASM performance
+- **ES6+ Features**: Arrow functions, destructuring, modules
+
+### Security Headers Required
+```http
+Cross-Origin-Embedder-Policy: require-corp
+Cross-Origin-Opener-Policy: same-origin
+```
+
+### Browser Support Matrix
+- **Chrome**: 88+ (with SharedArrayBuffer support)
+- **Firefox**: 79+ (with SharedArrayBuffer support)
+- **Safari**: 15+ (with SharedArrayBuffer support)
+- **Edge**: 88+ (with SharedArrayBuffer support)
+
+## Version Management Strategy
+
+### Dependency Updates
+- **Svelte**: Follow major version updates for new features
+- **Vite**: Update for performance improvements and security patches
+- **WaveSurfer.js**: Update for bug fixes and new audio features
+- **FFmpeg**: Update for new codec support and performance improvements
+
+### Breaking Changes Considerations
+```javascript
+// ✅ Good: Check for breaking changes before updates
+// Svelte 5.x: Runes system changes
+// Vite 6.x: Plugin API changes
+// WaveSurfer 7.x: API changes from v6
+
+// ❌ Bad: Blind updates without testing
+// Always test major version updates in development first
+```
+
+## Performance Optimization
+
+### Bundle Size Management
+- **Svelte**: Tree-shaking friendly, small runtime
+- **Vite**: Automatic code splitting and optimization
+- **WaveSurfer.js**: Modular imports for specific features
+- **FFmpeg**: Load only required codecs and features
+
+### Memory Management
+```javascript
+// ✅ Good: Proper cleanup of audio/video resources
+$effect(() => {
+  if (audioFile) {
+    wavesurfer.load(audioFile);
+    return () => {
+      wavesurfer.destroy(); // Cleanup on unmount
+    };
+  }
+});
+
+// ❌ Bad: Memory leaks from unmanaged resources
+wavesurfer.load(audioFile);
+// No cleanup when component unmounts
+```
+
+## Development Workflow
+
+### Package Manager
+- **pnpm**: Used for dependency management
+- **Benefits**: Faster installs, disk space efficiency
+- **Lock files**: Both `package-lock.json` and `pnpm-lock.yaml` present
+
+### Scripts
+```json
+{
+  "dev": "vite",           // Development server
+  "build": "vite build",   // Production build
+  "preview": "vite preview" // Preview production build
+}
+```
+
+## Security Considerations
+
+### FFmpeg WASM Security
+- **Isolation**: Runs in WebAssembly sandbox
+- **CORS**: Requires specific headers for SharedArrayBuffer
+- **File Access**: Limited to user-provided files
+
+### Audio/Video File Handling
+```javascript
+// ✅ Good: Validate file types and sizes
+const validateFile = (file) => {
+  const maxSize = 100 * 1024 * 1024; // 100MB
+  const allowedTypes = ['video/mp4', 'audio/mp3', 'audio/wav'];
+  
+  return file.size <= maxSize && allowedTypes.includes(file.type);
+};
+
+// ❌ Bad: No file validation
+const handleFile = (file) => {
+  // Process file without validation
+};
+```
+
+## Testing Strategy
+
+### Framework Compatibility
+- **Svelte Testing Library**: For component testing
+- **Vitest**: For unit testing (Vite-native)
+- **Playwright**: For E2E testing with media support
+
+### Media Testing Considerations
+- **Mock Audio/Video**: Use test fixtures for consistent testing
+- **FFmpeg Testing**: Mock FFmpeg operations in tests
+- **Browser APIs**: Mock Web Audio API for unit tests
+
+## Future Considerations
+
+### Potential Upgrades
+- **Svelte 6**: When available, evaluate runes improvements
+- **Vite 7**: For future build optimizations
+- **WaveSurfer 8**: For enhanced audio features
+- **FFmpeg 0.13+**: For new codec support
+
+### Migration Notes
+- **Svelte 5 → 6**: Monitor runes API changes
+- **Vite 6 → 7**: Check plugin compatibility
+- **WaveSurfer 7 → 8**: Review API changes
+- **FFmpeg 0.12 → 0.13**: Test codec compatibility

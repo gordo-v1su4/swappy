@@ -21,9 +21,6 @@ A Svelte 5-based video editing application with transient-driven video switching
 - `src/VideoEditor.svelte` - Video management and synchronization logic
 - `src/ffmpegService.js` - FFmpeg service for video processing operations
 
-### 2. Melody Canvas (melody-canvas/)
-A React-based audio visualization and canvas editing application.
-
 **Key Features:**
 - Real-time audio visualization with Web Audio API
 - Canvas-based editing with FabricJS integration
@@ -41,33 +38,21 @@ A React-based audio visualization and canvas editing application.
 ### Swappy (Root)
 ```bash
 # Development server (port 5000)
-npm run dev
-# or
 pnpm run dev
 
 # Production build
-npm run build
 pnpm run build
 
 # Preview production build
-npm run preview
 pnpm run preview
-```
-
-### Melody Canvas
-```bash
-cd melody-canvas
 
 # Development server
-npm run dev
 pnpm run dev
 
 # Production build with TypeScript compilation
-npm run build
 pnpm run build
 
 # Code formatting
-npm run lint
 pnpm run lint
 ```
 
@@ -75,9 +60,6 @@ pnpm run lint
 
 ### Audio Processing
 - **Swappy**: Uses WaveSurfer.js for waveform visualization and beat detection
-- **Melody Canvas**: Custom FFT-based frequency analysis with Web Audio API
-  - `FrequencyAnalyzer.ts` implements FFT with Hann windowing and frequency smoothing
-  - `FrequencyShaper.ts` applies waveform transformation algorithms
 
 ### Video Processing
 - **Swappy**: FFmpeg WASM integration for thumbnail generation and video processing
@@ -86,16 +68,9 @@ pnpm run lint
 
 ### State Management
 - **Swappy**: Svelte 5 runes ($state, $derived, $effect, $props, $bindable) with reactive patterns
-- **Melody Canvas**: Zustand stores with TypeScript interfaces
 
 ### UI Framework Integration
 - **Swappy**: Pure Svelte with custom CSS styling
-- **Melody Canvas**: React + TDesign components + UnoCSS for styling
-  - Path alias: `@/` maps to `src/`
-  - UnoCSS shortcuts for common flex patterns
-
-### Canvas Operations
-- **Melody Canvas**: FabricJS for draggable canvas objects and image/text editing
 
 ## Key Dependencies
 
@@ -104,22 +79,10 @@ pnpm run lint
 - `wavesurfer.js` - Audio waveform visualization
 - `svelte@5.34.7` + `vite@6.3.5` - Build system with latest Svelte 5 runes
 
-### Melody Canvas  
-- `fabric` - Canvas manipulation library
-- `fft.js` - Fast Fourier Transform for audio analysis
-- `@webav/av-cliper` - Video processing with WebCodecs
-- `zustand` - State management
-- `tdesign-react` - UI component library
-- `unocss` - Atomic CSS framework
-
 ## Development Notes
 
 ### Cross-Origin Headers
 Swappy's Vite config includes COOP/COEP headers required for FFmpeg WASM and SharedArrayBuffer support.
-
-### TypeScript Configuration
-- **Melody Canvas**: Uses TypeScript project references with separate app and node configs
-- Path aliases configured for `@/src/*` imports
 
 ### Audio Analysis
 The `FrequencyAnalyzer` class implements:

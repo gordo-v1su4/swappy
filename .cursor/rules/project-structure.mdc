@@ -1,0 +1,149 @@
+---
+description: Project structure and important files for Swappy video editing application
+globs: **/*
+alwaysApply: false
+---
+# Project Structure and File Organization
+
+## Overview
+
+Swappy is a Svelte 5-based video editing application that uses transient detection to automatically switch between video clips based on audio markers. The project follows a modern Svelte architecture with FFmpeg WASM integration for video processing.
+
+## Root Directory Structure
+
+```
+swappy/
+├── .cursor/                 # Cursor IDE configuration
+│   └── rules/              # Cursor rules and documentation
+├── .git/                   # Git version control
+├── public/                 # Static assets served by Vite
+├── src/                    # Main application source code
+├── index.html              # Entry HTML file (Vite)
+├── package.json            # Project dependencies and scripts
+├── package-lock.json       # npm lock file
+├── pnpm-lock.yaml          # pnpm lock file
+├── vite.config.js          # Vite build configuration
+├── .gitignore              # Git ignore patterns
+├── README.md               # Project documentation
+└── CLAUDE.md               # Claude-specific documentation
+```
+
+## Source Code Organization (`src/`)
+
+### Core Application Files
+
+- **[App.svelte](mdc:src/App.svelte)** - Main application component and entry point
+- **[main.js](mdc:src/main.js)** - Application bootstrap and initialization
+
+### Audio Processing Components
+
+- **[AudioFileManager.svelte](mdc:src/AudioFileManager.svelte)** - Audio file upload and management
+- **[AudioTimeline.svelte](mdc:src/AudioTimeline.svelte)** - Waveform visualization and transient detection
+- **[AudioVisualizer.svelte](mdc:src/AudioVisualizer.svelte)** - Real-time audio visualization
+- **[Markers.svelte](mdc:src/Markers.svelte)** - Marker visualization and interaction
+
+### Video Processing Components
+
+- **[VideoEditor.svelte](mdc:src/VideoEditor.svelte)** - Video management and synchronization logic
+- **[VideoPlayer.svelte](mdc:src/VideoPlayer.svelte)** - Main video playback component
+- **[ExportDialog.svelte](mdc:src/ExportDialog.svelte)** - Video export interface and settings
+
+### Services and Utilities
+
+- **[ffmpegService.js](mdc:src/ffmpegService.js)** - FFmpeg WASM integration for video processing
+
+## Static Assets (`public/`)
+
+- **[index.html](mdc:public/index.html)** - Static HTML template
+- **[global.css](mdc:public/global.css)** - Global CSS styles
+- **favicon.png** - Application favicon
+
+## Configuration Files
+
+### Build and Development
+- **[vite.config.js](mdc:vite.config.js)** - Vite build tool configuration
+- **[package.json](mdc:package.json)** - Project metadata, dependencies, and scripts
+
+### Documentation
+- **[README.md](mdc:README.md)** - Comprehensive project documentation
+- **[CLAUDE.md](mdc:CLAUDE.md)** - Claude-specific development notes
+
+## Key Dependencies
+
+### Core Framework
+- **Svelte 5.34.7** - Modern reactive framework with runes system
+- **Vite 6.3.5** - Fast build tool and dev server
+
+### Audio Processing
+- **WaveSurfer.js 7.9.5** - Audio waveform visualization and analysis
+
+### Video Processing
+- **@ffmpeg/ffmpeg 0.12.15** - Browser-based video processing
+- **@ffmpeg/util 0.12.2** - FFmpeg utilities
+
+## File Naming Conventions
+
+### Svelte Components
+- Use **PascalCase** for component names: `VideoPlayer.svelte`
+- Match component name to file name: `VideoPlayer.svelte` contains `<script>` with `VideoPlayer` component
+- Use descriptive names that indicate component purpose
+
+### JavaScript Files
+- Use **camelCase** for utility files: `ffmpegService.js`
+- Use **kebab-case** for configuration files: `vite.config.js`
+
+### CSS and Assets
+- Use **kebab-case** for CSS files: `global.css`
+- Use descriptive names for images and icons
+
+## Component Architecture Patterns
+
+### State Management
+- Use Svelte 5 runes (`$state`, `$derived`, `$effect`) for reactive state
+- Keep state close to where it's used
+- Pass data down through props, emit events up
+
+### File Organization
+- Group related components together
+- Separate concerns: audio processing, video processing, UI components
+- Keep services and utilities separate from components
+
+### Import Patterns
+```javascript
+// ✅ Good: Clear, specific imports
+import VideoPlayer from './VideoPlayer.svelte';
+import { processVideo } from './ffmpegService.js';
+
+// ❌ Bad: Unclear or overly broad imports
+import * as utils from './utils.js';
+```
+
+## Development Workflow
+
+### Scripts (from package.json)
+- `pnpm run dev` - Start development server
+- `pnpm run build` - Create production build
+- `pnpm run preview` - Preview production build
+
+### File Modification Guidelines
+- Update component documentation when changing public APIs
+- Maintain consistent naming across related files
+- Follow existing patterns for state management and event handling
+- Update README.md when adding new features or changing architecture
+
+## Browser Requirements
+
+The application requires modern browsers with support for:
+- Web Audio API
+- File API
+- HTML5 Video
+- ES6+ JavaScript
+- SharedArrayBuffer (for FFmpeg WASM)
+- COEP/COOP headers
+
+## Performance Considerations
+
+- Large video files are processed in chunks via FFmpeg WASM
+- Audio analysis uses Web Audio API for real-time processing
+- Video thumbnails are generated on-demand
+- State updates are optimized using Svelte's reactivity system
