@@ -216,20 +216,22 @@
 {#if show}
   <div 
     class="dialog-overlay" 
-    on:click={closeDialog}
-    on:keydown={handleKeydown}
+    onclick={closeDialog}
+    onkeydown={handleKeydown}
+    role="presentation"
   >
     <div
       class="dialog"
-      on:click|stopPropagation
-      on:keydown|stopPropagation
+      onclick={(e) => e.stopPropagation()}
+      onkeydown={(e) => e.stopPropagation()}
       role="dialog"
       aria-modal="true"
       aria-labelledby="dialog-title"
+      tabindex="0"
     >
       <div class="dialog-header">
         <h3 id="dialog-title" class="dialog-title">Export Region</h3>
-        <button class="close-button" on:click={closeDialog}>×</button>
+        <button class="close-button" onclick={closeDialog}>×</button>
       </div>
       
       <div class="dialog-content">
@@ -281,8 +283,8 @@
       </div>
       
       <div class="dialog-footer">
-        <button class="button cancel-button" on:click={closeDialog}>Cancel</button>
-        <button class="button export-button" on:click={handleExport}>Export</button>
+        <button class="button cancel-button" onclick={closeDialog}>Cancel</button>
+        <button class="button export-button" onclick={handleExport}>Export</button>
       </div>
     </div>
   </div>

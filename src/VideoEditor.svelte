@@ -938,7 +938,7 @@ function getPreloadedVideo(videoId) {
     <!-- Video Upload Button -->
     <button
       class="btn secondary"
-      on:click={handleVideoUpload}
+      onclick={handleVideoUpload}
     >
       📁 Batch Upload Videos
     </button>
@@ -946,7 +946,7 @@ function getPreloadedVideo(videoId) {
     <!-- Reordering Mode Toggle -->
     <button
       class="btn {isReorderingMode ? 'active' : 'secondary'}"
-      on:click={toggleReorderingMode}
+      onclick={toggleReorderingMode}
     >
       {isReorderingMode ? 'Exit Reorder Mode' : 'Reorder Mode'}
     </button>
@@ -959,7 +959,7 @@ function getPreloadedVideo(videoId) {
     accept="video/*"
     multiple
     style="display: none;"
-    on:change={handleVideoFiles}
+    onchange={handleVideoFiles}
   />
   
   <!-- Main Video Player -->
@@ -1000,8 +1000,8 @@ function getPreloadedVideo(videoId) {
           {#if isReorderingMode && index === 0}
             <div
               class="insertion-point"
-              on:click={() => handleInsertionClick(index)}
-              on:keydown={(e) => e.key === 'Enter' && handleInsertionClick(index)}
+              onclick={() => handleInsertionClick(index)}
+              onkeydown={(e) => e.key === 'Enter' && handleInsertionClick(index)}
               tabindex="0"
               role="button"
               aria-label="Insert video before position {index + 1}"
@@ -1014,10 +1014,10 @@ function getPreloadedVideo(videoId) {
           <button
             class="video-thumbnail {currentVideoIndex === index ? 'active' : ''}"
             draggable={isReorderingMode}
-            on:dragstart={(e) => handleDragStart(e, index)}
-            on:dragover={handleDragOver}
-            on:drop={(e) => handleDrop(e, index)}
-            on:click={() => !isReorderingMode && (currentVideoIndex = index)}
+            ondragstart={(e) => handleDragStart(e, index)}
+            ondragover={handleDragOver}
+            ondrop={(e) => handleDrop(e, index)}
+            onclick={() => !isReorderingMode && (currentVideoIndex = index)}
             disabled={isReorderingMode}
             aria-label="Video clip {index + 1}: {video.name}"
           >
@@ -1034,8 +1034,8 @@ function getPreloadedVideo(videoId) {
                 src={video.thumbnailUrl}
                 alt="Thumbnail for {video.name}"
                 class="thumbnail-image"
-                on:load={() => console.log(`✅ Thumbnail loaded for ${video.name}`)}
-                on:error={() => console.error(`❌ Thumbnail failed to load for ${video.name}`)}
+                onload={() => console.log(`✅ Thumbnail loaded for ${video.name}`)}
+                onerror={() => console.error(`❌ Thumbnail failed to load for ${video.name}`)}
               />
             {:else}
               <!-- Placeholder when no thumbnail available -->
@@ -1055,7 +1055,7 @@ function getPreloadedVideo(videoId) {
           {#if isReorderingMode}
             <button
               class="insertion-point"
-              on:click={() => handleInsertionClick(index + 1)}
+              onclick={() => handleInsertionClick(index + 1)}
               aria-label="Insert video after position {index + 1}"
             >
               <span>+</span>
@@ -1068,24 +1068,24 @@ function getPreloadedVideo(videoId) {
 
   <!-- Insertion Interface Modal -->
   {#if showInsertionInterface}
-    <!-- svelte-ignore a11y-click-events-have-key-events -->
-    <!-- svelte-ignore a11y-no-static-element-interactions -->
+    <!-- svelte-ignore a11y_click_events_have_key_events -->
+    <!-- svelte-ignore a11y_no_static_element_interactions -->
     <div
       class="modal-overlay"
       role="presentation"
-      on:click={() => showInsertionInterface = false}
+      onclick={() => showInsertionInterface = false}
     >
-      <!-- svelte-ignore a11y-no-noninteractive-tabindex -->
-      <!-- svelte-ignore a11y-no-static-element-interactions -->
-      <!-- svelte-ignore a11y-click-events-have-key-events -->
+      <!-- svelte-ignore a11y_no_noninteractive_tabindex -->
+      <!-- svelte-ignore a11y_no_static_element_interactions -->
+      <!-- svelte-ignore a11y_click_events_have_key_events -->
       <div
         class="insertion-modal"
         role="dialog"
         aria-modal="true"
         aria-labelledby="modal-title"
         tabindex="0"
-        on:keydown={(e) => { if (e.key === 'Escape') showInsertionInterface = false; }}
-        on:click|stopPropagation
+        onkeydown={(e) => { if (e.key === 'Escape') showInsertionInterface = false; }}
+        onclick={(e) => e.stopPropagation()}
       >
         <h4 id="modal-title">Insert Video at Position {insertionIndex + 1}</h4>
         <p>Select video files to insert at this position:</p>
@@ -1094,12 +1094,12 @@ function getPreloadedVideo(videoId) {
           type="file"
           accept="video/*"
           multiple
-          on:change={handleInsertionVideoSelect}
+          onchange={handleInsertionVideoSelect}
           class="file-input-modal"
         />
 
         <div class="modal-actions">
-          <button class="btn secondary" on:click={() => showInsertionInterface = false}>
+          <button class="btn secondary" onclick={() => showInsertionInterface = false}>
             Cancel
           </button>
         </div>

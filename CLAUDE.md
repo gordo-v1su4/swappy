@@ -91,9 +91,10 @@ pnpm run preview
 - Video export capabilities with custom settings
 
 ### State Management
-- Svelte 5 runes system for reactive state management
+- Svelte 5 runes system (`$state`, `$derived`, `$effect`) for reactive state management
 - Component-based architecture with props and events
 - Optimized reactivity with compile-time optimizations
+- Modern event handling using native event attributes (`onclick`, `onchange`, etc.)
 
 ## Technical Architecture
 

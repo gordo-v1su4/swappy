@@ -232,7 +232,7 @@
     class="file-input"
     accept="audio/*"
     multiple
-    on:change={handleFileUpload}
+    onchange={handleFileUpload}
   />
   <label for="audio-upload" class="file-label">
     Open Audio File
@@ -243,8 +243,8 @@
       {#each audioFiles as file}
         <div
           class="file-item {selectedFile && selectedFile.id === file.id ? 'selected' : ''}"
-          on:click={() => selectFile(file)}
-          on:keydown={(e) => e.key === 'Enter' && selectFile(file)}
+          onclick={() => selectFile(file)}
+          onkeydown={(e) => e.key === 'Enter' && selectFile(file)}
           tabindex="0"
           role="option"
           aria-selected={selectedFile && selectedFile.id === file.id}
@@ -256,7 +256,10 @@
           </div>
           <button
             class="remove-button"
-            on:click|stopPropagation={() => removeFile(file)}
+            onclick={(e) => {
+              e.stopPropagation();
+              removeFile(file);
+            }}
             aria-label="Remove file"
           >
             ×

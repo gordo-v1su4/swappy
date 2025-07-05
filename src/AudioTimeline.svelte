@@ -1765,14 +1765,14 @@
         type="text"
         class="title-input"
         bind:value={projectName}
-        on:blur={handleTitleBlur}
-        on:keydown={handleTitleKeydown}
+        onblur={handleTitleBlur}
+        onkeydown={handleTitleKeydown}
       />
     {:else}
       <div 
         class="project-title" 
-        on:click={toggleTitleEdit}
-        on:keydown={(e) => e.key === 'Enter' && toggleTitleEdit()}
+        onclick={toggleTitleEdit}
+        onkeydown={(e) => e.key === 'Enter' && toggleTitleEdit()}
         tabindex="0"
         role="button"
         aria-label="Edit project title">
@@ -1792,7 +1792,7 @@
     <div class="transport-controls">
       <button 
         class="button" 
-        on:click={togglePlay}
+        onclick={togglePlay}
         aria-label={isPlaying ? 'Pause' : 'Play'}
       >
         {#if isPlaying}
@@ -1816,7 +1816,7 @@
         max="1"
         step="0.05"
         bind:value={volume}
-        on:input={() => setVolume(volume)}
+        oninput={() => setVolume(volume)}
       />
     </div>
 
@@ -1829,7 +1829,7 @@
         max="20"
         step="0.5"
         bind:value={zoom}
-        on:input={() => setZoom(zoom)}
+        oninput={() => setZoom(zoom)}
       />
     </div>
   </div>
@@ -1837,7 +1837,7 @@
   <div class="region-controls">
     <button
       class="button"
-      on:click={createRegion}
+      onclick={createRegion}
       disabled={!isLoaded}
     >
       Create Region
@@ -1845,7 +1845,7 @@
 
     <button
       class="button"
-      on:click={playRegion}
+      onclick={playRegion}
       disabled={!activeRegion}
     >
       Play Region
@@ -1853,7 +1853,7 @@
 
     <button
       class="button"
-      on:click={deleteRegion}
+      onclick={deleteRegion}
       disabled={!activeRegion}
     >
       Delete Region
@@ -1861,7 +1861,7 @@
 
     <button
       class="button"
-      on:click={exportRegion}
+      onclick={exportRegion}
       disabled={!activeRegion}
     >
       Export Region
@@ -1869,7 +1869,7 @@
     
     <button
       class="button marker-button"
-      on:click={createMarker}
+      onclick={createMarker}
       disabled={!isLoaded}
     >
       Add Timestamp
@@ -1877,7 +1877,7 @@
     
     <button
       class="button analyze-button"
-      on:click={analyzeAudio}
+      onclick={analyzeAudio}
       disabled={!isLoaded || isAnalyzing}
     >
       {#if isAnalyzing}
@@ -1952,7 +1952,7 @@
       
       <button
         class="button detect-button"
-        on:click={detectTransients}
+        onclick={detectTransients}
         disabled={!isLoaded || isDetectingTransients}
       >
         {#if isDetectingTransients}
@@ -1977,7 +1977,7 @@
           <button
             class="button speed-toggle"
             class:enabled={speedRampEnabled}
-            on:click={() => speedRampEnabled = !speedRampEnabled}
+            onclick={() => speedRampEnabled = !speedRampEnabled}
           >
             {speedRampEnabled ? 'Enabled' : 'Disabled'}
           </button>
@@ -2085,7 +2085,7 @@
               <button 
                 class="marker-delete" 
                 aria-label="Delete marker"
-                on:click={() => deleteMarker(marker.id)}
+                onclick={() => deleteMarker(marker.id)}
               >
                 ×
               </button>
@@ -2109,7 +2109,7 @@
             <button 
               class="section-button"
               style="background-color: {section.color};"
-              on:click={() => jumpToSection(section.id)}
+              onclick={() => jumpToSection(section.id)}
             >
               {section.name} ({formatTime(section.start)} - {formatTime(section.end)})
             </button>
