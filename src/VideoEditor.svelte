@@ -980,7 +980,7 @@ function getPreloadedVideo(videoId) {
   
   <!-- Markers Display -->
   <Markers
-    markers={markers}
+    markers={audioMarkers}
     {currentTime}
     {duration}
     playing={isPlaying}

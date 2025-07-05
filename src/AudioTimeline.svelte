@@ -857,12 +857,11 @@
 
       // Create new markers for filtered transients
       filtered.forEach((transient, index) => {
-        createTransientMarker(transient.time, index, filtered.length, transient.color);
+        createTransientMarker(transient.time, index, filtered.length, transient.color, [transient.source]);
       });
 
-      transientMarkers = filtered;
       filteredTransients = filtered;
-      console.log(`✅ Applied filters: ${filtered.length} transients displayed (from ${combinedTransients.length} total)`);
+      console.log(`✅ Applied filters: ${transientMarkers.length} transients displayed (from ${combinedTransients.length} total)`);
 
     } catch (error) {
       console.error('❌ Error filtering transients:', error);
@@ -1577,7 +1576,7 @@
   }
   
   .analysis-section {
-    margin-bottom: 25px;
+    margin-bottom: 15px;
   }
   
   .analysis-section:last-child {
@@ -1792,6 +1791,11 @@
   .speed-indicator.active::after {
     opacity: 1;
   }
+  
+  .glowy-yellow {
+    color: #ffef00;
+    text-shadow: 0 0 5px rgba(255, 239, 0, 0.7);
+  }
 </style>
 
 <div class="audio-timeline">
@@ -1932,9 +1936,6 @@
       <div class="analysis-header">
         <h3>Transient Detection</h3>
         <div class="transient-info">
-          <div class="transient-count glowy-yellow">
-            {transientMarkers.length} Transients
-          </div>
           <div class="detection-indicator" class:hit={isTransientHit}></div>
         </div>
       </div>

@@ -336,8 +336,10 @@
     const files = Array.from(event.target.files);
     if (!files.length) return;
 
-    const newStems = [...projectTree.stems];
+    const stemsToProcess = [];
+    const newStemsState = [...projectTree.stems];
 
+    // First, create all stem objects and add them to a temporary list
     for (const file of files) {
       const stemType = targetStemType || inferStemType(file.name);
       const stemConfig = stemTypes.find(t => t.id === stemType);
@@ -346,7 +348,7 @@
       const stem = {
         id: generateId(),
         name: file.name,
-        file: file,
+        file: file, // Temporarily store the file for analysis
         size: file.size,
         type: stemType,
         color: stemConfig.color,
@@ -357,35 +359,44 @@
         transients: [],
         duration: 0
       };
+      
+      stemsToProcess.push(stem);
 
-      const existingIndex = newStems.findIndex(s => s.type === stemType);
+      const existingIndex = newStemsState.findIndex(s => s.type === stemType);
       if (existingIndex >= 0) {
-        newStems[existingIndex] = stem;
+        newStemsState[existingIndex] = stem;
       } else {
-        newStems.push(stem);
+        newStemsState.push(stem);
       }
     }
 
-    projectTree.stems = newStems;
+    // Update UI once to show all stems as "analyzing"
+    projectTree.stems = newStemsState;
 
-    for (const stem of projectTree.stems) {
-      if (stem.analyzing && stem.file) {
-        console.log(`Analyzing ${stem.name}...`);
-        try {
-          const result = await analyzeAudioForTransients(stem.file, stem.type);
-          stem.transients = result.transients;
-          stem.duration = result.duration;
-          stem.analyzing = false;
-          stem.file = null;
-          console.log(`Finished analyzing ${stem.name}`);
-        } catch (error) {
-          console.error(`Error analyzing stem ${stem.name}:`, error);
-          stem.analyzing = false;
-          stem.file = null;
+    // Now, process them sequentially
+    for (const stem of stemsToProcess) {
+      try {
+        const result = await analyzeAudioForTransients(stem.file, stem.type);
+        
+        // Find the stem in the project state and update it
+        const stemToUpdate = projectTree.stems.find(s => s.id === stem.id);
+        if (stemToUpdate) {
+          stemToUpdate.transients = result.transients;
+          stemToUpdate.duration = result.duration;
+          stemToUpdate.analyzing = false;
+          stemToUpdate.file = null; // Discard file object
+        }
+      } catch (error) {
+        console.error(`Error analyzing stem ${stem.name}:`, error);
+        const stemToUpdate = projectTree.stems.find(s => s.id === stem.id);
+        if (stemToUpdate) {
+          stemToUpdate.analyzing = false;
+          stemToUpdate.file = null;
         }
       }
     }
-    
+
+    // After all processing is done, trigger a final state update and dispatch events
     projectTree.stems = [...projectTree.stems];
     updateCombinedTransients();
 
@@ -556,7 +567,7 @@
         combined.push({
           time,
           stem: 'master',
-          color: '#00b8a9' // Master track color
+          color: '#ffef00' // Master track color
         });
       });
     }
@@ -662,13 +673,13 @@
                     checked={projectTree.masterSong.included}
                     onchange={() => toggleMasterIncluded()}
                   />
-                  <span class="toggle-slider"></span>
+                  <span class="toggle-slider" style="background-color: {projectTree.masterSong.included ? '#ffef00' : '#555'};"></span>
                   <span class="toggle-label">Include</span>
                 </label>
 
 
 
-                <span class="transient-count">
+                <span class="transient-count" style="color: #ffef00; border-color: #ffef00;">
                   {projectTree.masterSong.transients?.length || 0} transients
                 </span>
               </div>
@@ -715,7 +726,7 @@
                       checked={stem.included}
                       onchange={() => toggleStemIncluded(stem.id)}
                     />
-                    <span class="toggle-slider"></span>
+                    <span class="toggle-slider" style="background-color: {stem.included ? stem.color : '#555'};"></span>
                   </label>
 
                   <span class="transient-count" style="color: {stem.color}; border-color: {stem.color};">
@@ -988,7 +999,7 @@
     display: flex;
     justify-content: space-between;
     align-items: center;
-    padding: 12px 16px;
+    padding: 4px 16px 2px 16px;
     background-color: rgba(0, 0, 0, 0.2);
   }
 
@@ -1007,7 +1018,7 @@
 
   .stem-name {
     font-weight: 500;
-    font-size: 13px;
+    font-size: 12px;
     color: #666;
   }
 
@@ -1183,7 +1194,7 @@
   }
 
   .stem-info {
-    padding: 8px 16px;
+    padding: 4px 16px 8px 16px;
     display: flex;
     justify-content: space-between;
     align-items: center;
@@ -1191,7 +1202,7 @@
   }
 
   .stem-name-small {
-    font-size: 11px;
+    font-size: 10px;
     color: #a1a1aa;
     flex: 1;
     margin-right: 8px;
