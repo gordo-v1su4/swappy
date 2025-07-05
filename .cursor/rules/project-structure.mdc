@@ -7,7 +7,7 @@ alwaysApply: false
 
 ## Overview
 
-Swappy is a Svelte 5-based video editing application that uses transient detection to automatically switch between video clips based on audio markers. The project follows a modern Svelte architecture with FFmpeg WASM integration for video processing.
+Swappy v0.1 is a Svelte 5-based video editing application that uses transient detection to automatically switch between video clips based on audio markers. The project follows a modern Svelte architecture with FFmpeg WASM integration for video processing.
 
 ## Root Directory Structure
 
@@ -33,11 +33,17 @@ swappy/
 ### Core Application Files
 
 - **[App.svelte](mdc:src/App.svelte)** - Main application component and entry point
+  - Manages project title (auto-updates when master audio is loaded)
+  - Coordinates audio and video synchronization
+  - Handles global state and component communication
 - **[main.js](mdc:src/main.js)** - Application bootstrap and initialization
 
 ### Audio Processing Components
 
 - **[AudioFileManager.svelte](mdc:src/AudioFileManager.svelte)** - Audio file and stem management, including transient analysis.
+  - Handles master audio file upload and analysis
+  - Manages stem files with automatic type detection
+  - Dispatches `masterSelected` event to update project title
 - **[AudioTimeline.svelte](mdc:src/AudioTimeline.svelte)** - Waveform visualization and transient filtering.
 - **[AudioVisualizer.svelte](mdc:src/AudioVisualizer.svelte)** - Real-time audio visualization
 - **[Markers.svelte](mdc:src/Markers.svelte)** - Marker visualization and interaction

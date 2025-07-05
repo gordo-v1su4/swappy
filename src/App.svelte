@@ -59,7 +59,14 @@ function handleMasterSelected(event) {
   const masterSong = event.detail;
   masterAudio = masterSong;
   selectedAudioUrl = masterSong.url;
+  
+  // Update project title to match the master audio file name
+  const fileName = masterSong.name;
+  const nameWithoutExtension = fileName.replace(/\.[^/.]+$/, ""); // Remove file extension
+  projectName = nameWithoutExtension;
+  
   console.log('Master song selected:', masterSong.name);
+  console.log('Project title updated to:', projectName);
 }
 
 // Handle stems update from enhanced audio file manager
@@ -226,7 +233,7 @@ function updateAudioMarkers() {
 
 <div class="container">
   <div class="app-header">
-    <h1 class="app-title">Audio Editor</h1>
+    <h1 class="app-title">Swappy v0.1</h1>
     <div class="project-info">
       <span class="project-title">{projectName}</span>
     </div>
