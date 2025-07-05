@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-Swappy is a Svelte 5-based video editing application that uses transient detection to automatically switch between video clips based on audio markers. The project follows a modern Svelte architecture with FFmpeg WASM integration for video processing.
+Swappy is a Svelte 5-based video editing application that uses transient detection to automatically switch between video clips based on audio markers. The project follows a modern Svelte architecture with FFmpeg WASM integration for video processing. The application supports uploading a master audio track and individual stems (e.g., vocals, drums, bass) for fine-grained transient control.
 
 ## Project Structure
 
@@ -28,8 +28,8 @@ swappy/
 - `main.js` - Application bootstrap and initialization
 
 **Audio Processing Components:**
-- `AudioFileManager.svelte` - Audio file upload and management
-- `AudioTimeline.svelte` - Waveform visualization and transient detection
+- `AudioFileManager.svelte` - Audio file and stem management, including transient analysis.
+- `AudioTimeline.svelte` - Waveform visualization and transient filtering.
 - `AudioVisualizer.svelte` - Real-time audio visualization
 - `Markers.svelte` - Marker visualization and interaction
 
@@ -41,76 +41,35 @@ swappy/
 **Services and Utilities:**
 - `ffmpegService.js` - FFmpeg WASM integration for video processing
 
-## Technology Stack
-
-### Core Framework
-- **Svelte 5.34.7** - Modern reactive framework with runes system (`$state`, `$derived`, `$effect`)
-- **Vite 6.3.5** - Fast build tool and dev server with ES modules
-- **@sveltejs/vite-plugin-svelte 5.1.0** - Seamless Svelte + Vite integration
-
-### Audio Processing
-- **WaveSurfer.js 7.9.5** - Audio waveform visualization and analysis library
-  - Real-time waveform rendering
-  - Audio playback control
-  - Marker and region management
-  - Transient detection algorithms
-
-### Video Processing
-- **@ffmpeg/ffmpeg 0.12.15** - WebAssembly port of FFmpeg for browser-based video processing
-- **@ffmpeg/util 0.12.2** - FFmpeg utilities for file handling and memory management
-
-### Package Manager
-- **pnpm** - Used for dependency management with faster installs and disk efficiency
-
-## Development Commands
-
-```bash
-# Development server (port 5000)
-pnpm run dev
-
-# Production build
-pnpm run build
-
-# Preview production build
-pnpm run preview
-```
-
 ## Key Features
 
 ### Audio Analysis & Processing
-- Audio file upload and management
-- Real-time waveform visualization with WaveSurfer.js
-- Transient detection for automatic marker generation
-- Audio playback synchronization with video
+- **Stem-based Workflow**: Upload a master audio track and individual stems.
+- **Automatic Transient Detection**: Each uploaded audio file (master and stems) is automatically analyzed to detect transients.
+- **Transient Filtering**: A dedicated UI allows for filtering the combined transients from the master and stems based on density, randomness, and other parameters.
+- **Save/Load Projects**: Project state, including all transient data, can be saved to a JSON file and loaded back into the application.
+- **Real-time Waveform Visualization**: Uses WaveSurfer.js for waveform display.
+- **Audio Playback Synchronization**: The master audio track is synchronized with the video playback.
 
 ### Video Management & Processing
 - Multiple video clip upload and management
 - FFmpeg WASM integration for thumbnail generation
-- Video switching synchronized to audio markers
+- Video switching synchronized to the filtered audio markers
 - Drag & drop video reordering functionality
 - Video export capabilities with custom settings
-
-### State Management
-- Svelte 5 runes system (`$state`, `$derived`, `$effect`) for reactive state management
-- Component-based architecture with props and events
-- Optimized reactivity with compile-time optimizations
-- Modern event handling using native event attributes (`onclick`, `onchange`, etc.)
 
 ## Technical Architecture
 
 ### State Management Patterns
-```javascript
-// ✅ Use Svelte 5 runes for reactive state
-let count = $state(0);
-let doubled = $derived(count * 2);
-$effect(() => console.log('Count changed:', count));
-```
+- The application uses Svelte 5 runes (`$state`, `$derived`, `$effect`) for reactive state management.
+- State is managed in the `App.svelte` component and passed down to child components via props.
+- Child components emit events to notify the parent of state changes.
+- To prevent infinite loops, state updates are performed immutably, especially for arrays and objects. For example, instead of `myArray.push(newItem)`, use `myArray = [...myArray, newItem]`.
 
 ### Component Architecture
-- Group related components together
-- Separate concerns: audio processing, video processing, UI components
-- Keep services and utilities separate from components
-- Use descriptive PascalCase naming for Svelte components
+- **`AudioFileManager.svelte`**: Manages all audio files, including the master track and stems. It is responsible for uploading, analyzing, and storing transient data for each file. It emits events to notify the rest of the application of changes to the audio files and their transients.
+- **`AudioTimeline.svelte`**: Receives transient data from `AudioFileManager.svelte` via `App.svelte`. It displays the waveform of the master track and provides UI controls for filtering the combined transients. It does not perform any transient detection itself.
+- **`App.svelte`**: The central hub of the application. It manages the overall state and facilitates communication between the `AudioFileManager` and `AudioTimeline` components.
 
 ### Import Patterns
 ```javascript

@@ -37,8 +37,8 @@ swappy/
 
 ### Audio Processing Components
 
-- **[AudioFileManager.svelte](mdc:src/AudioFileManager.svelte)** - Audio file upload and management
-- **[AudioTimeline.svelte](mdc:src/AudioTimeline.svelte)** - Waveform visualization and transient detection
+- **[AudioFileManager.svelte](mdc:src/AudioFileManager.svelte)** - Audio file and stem management, including transient analysis.
+- **[AudioTimeline.svelte](mdc:src/AudioTimeline.svelte)** - Waveform visualization and transient filtering.
 - **[AudioVisualizer.svelte](mdc:src/AudioVisualizer.svelte)** - Real-time audio visualization
 - **[Markers.svelte](mdc:src/Markers.svelte)** - Marker visualization and interaction
 
