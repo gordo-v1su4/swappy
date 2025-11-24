@@ -210,16 +210,16 @@ wavesurfer.load(audioFile);
 ## Development Workflow
 
 ### Package Manager
-- **pnpm**: Used for dependency management
-- **Benefits**: Faster installs, disk space efficiency
-- **Lock files**: Both `package-lock.json` and `pnpm-lock.yaml` present
+- **bun**: Used for dependency management and script execution
+- **Benefits**: Extremely fast installs, built-in runtime, compatible with npm
+- **Lock files**: `bun.lockb` (binary lockfile)
 
 ### Scripts
 ```json
 {
-  "dev": "vite",           // Development server
-  "build": "vite build",   // Production build
-  "preview": "vite preview" // Preview production build
+  "dev": "vite",           // Development server (run with `bun run dev`)
+  "build": "vite build",   // Production build (run with `bun run build`)
+  "preview": "vite preview" // Preview production build (run with `bun run preview`)
 }
 ```
 

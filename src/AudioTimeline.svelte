@@ -31,7 +31,7 @@
   let isPlaying = $state(false);
   let duration = $state(0);
   let currentTime = $state(0);
-  let volume = $state(1);
+  let volume = $state(1); // Initialize volume to 100%
   let zoom = $state(1); // Start with minimum zoom to ensure entire track fits
   // Properties for regions and markers
   let regions = $state([]);
@@ -136,6 +136,173 @@
       console.warn("Audio reactive calculation failed:", error);
       return 1.0;
     }
+  }
+
+  // --- Stem Playback Logic ---
+  let stemBuffers = $state(new Map()); // Map<stemId, AudioBuffer>
+  let stemSources = $state(new Map()); // Map<stemId, AudioBufferSourceNode>
+  let stemGains = $state(new Map()); // Map<stemId, GainNode>
+  let audioContext = $state(null);
+  let isMasterIncluded = $state(true); // Track master toggle state
+
+  // Initialize AudioContext
+  function getAudioContext() {
+    if (!audioContext) {
+      audioContext = new (window.AudioContext || window.webkitAudioContext)();
+    }
+    return audioContext;
+  }
+
+  // Load stem buffers when audioStems changes
+  $effect(() => {
+    if (audioStems && audioStems.length > 0) {
+      loadStemBuffers();
+    }
+  });
+
+  // Watch for master audio inclusion changes
+  $effect(() => {
+    if (masterAudio) {
+      isMasterIncluded = masterAudio.included !== false;
+      updatePlaybackMode();
+    }
+  });
+
+  // Watch for stem inclusion changes (muting/soloing)
+  $effect(() => {
+    if (audioStems) {
+      // Force reactivity on deep changes
+      const _ = audioStems.map((s) => s.muted + s.soloed).join(",");
+      updateStemMuting();
+    }
+  });
+
+  async function loadStemBuffers() {
+    const ctx = getAudioContext();
+
+    for (const stem of audioStems) {
+      if (!stemBuffers.has(stem.id) && stem.file) {
+        try {
+          console.log(`🎵 Decoding stem: ${stem.name}`);
+          const arrayBuffer = await stem.file.arrayBuffer();
+          const audioBuffer = await ctx.decodeAudioData(arrayBuffer);
+          stemBuffers.set(stem.id, audioBuffer);
+          console.log(`✅ Decoded stem: ${stem.name}`);
+        } catch (error) {
+          console.error(`❌ Failed to decode stem ${stem.name}:`, error);
+        }
+      }
+    }
+  }
+
+  function updatePlaybackMode() {
+    const hasStems = audioStems && audioStems.length > 0;
+
+    if (hasStems) {
+      // Stem Mode: Always mute Master, Play Stems
+      if (wavesurfer) wavesurfer.setVolume(0);
+      if (isPlaying) {
+        syncStemsToTimeline();
+      }
+      // Ensure stem muting is applied immediately
+      updateStemMuting();
+    } else {
+      // Master Mode: No stems, play Master
+      stopStems();
+      if (wavesurfer) wavesurfer.setVolume(1);
+    }
+  }
+
+  function updateStemMuting() {
+    const ctx = getAudioContext();
+    const now = ctx.currentTime;
+    const anySolo = audioStems.some((s) => s.soloed);
+
+    audioStems.forEach((stem) => {
+      let gainNode = stemGains.get(stem.id);
+      if (!gainNode) {
+        // Create gain node if it doesn't exist (will be connected later)
+        gainNode = ctx.createGain();
+        stemGains.set(stem.id, gainNode);
+        gainNode.connect(ctx.destination);
+      }
+
+      // DAW Logic:
+      // 1. If ANY track is soloed, only soloed tracks play.
+      // 2. If NO track is soloed, all unmuted tracks play.
+      let shouldPlay = false;
+
+      if (anySolo) {
+        shouldPlay = stem.soloed;
+      } else {
+        shouldPlay = !stem.muted;
+      }
+
+      // Smooth transition
+      const targetGain = shouldPlay ? 1 : 0;
+      gainNode.gain.setTargetAtTime(targetGain, now, 0.05);
+
+      console.log(
+        `🎚️ Stem ${stem.name} gain set to ${targetGain} (Muted: ${stem.muted}, Soloed: ${stem.soloed})`,
+      );
+    });
+  }
+
+  function syncStemsToTimeline() {
+    if (!audioStems || audioStems.length === 0) {
+      console.warn("⚠️ syncStemsToTimeline called but no stems available");
+      return;
+    }
+
+    const ctx = getAudioContext();
+    const startTime = wavesurfer.getCurrentTime();
+
+    console.log(
+      `▶️ Syncing stems at ${startTime.toFixed(3)}s. Context State: ${ctx.state}`,
+    );
+
+    // Stop existing sources
+    stopStems();
+
+    // Start new sources for each stem
+    stemBuffers.forEach((buffer, stemId) => {
+      const stem = audioStems.find((s) => s.id === stemId);
+      if (!stem) return;
+
+      const source = ctx.createBufferSource();
+      source.buffer = buffer;
+
+      // Get or create gain node
+      let gainNode = stemGains.get(stemId);
+      if (!gainNode) {
+        gainNode = ctx.createGain();
+        stemGains.set(stemId, gainNode);
+        gainNode.connect(ctx.destination);
+      }
+
+      source.connect(gainNode);
+
+      // Start playback at current time
+      // Note: AudioBufferSourceNode parameters are (when, offset, duration)
+      // We want to start 'now' (ctx.currentTime) and play from 'startTime' (offset)
+      source.start(ctx.currentTime, startTime);
+
+      console.log(`🔊 Started stem: ${stem.name}`);
+
+      // Store source to stop later
+      stemSources.set(stemId, source);
+    });
+  }
+
+  function stopStems() {
+    stemSources.forEach((source) => {
+      try {
+        source.stop();
+      } catch (e) {
+        // Ignore errors if already stopped
+      }
+    });
+    stemSources.clear();
   }
 
   // Generate unique shades of blue and purple for markers
@@ -260,16 +427,36 @@
       }
     });
 
-    wavesurfer.on("play", () => {
+    wavesurfer.on("play", async () => {
       isPlaying = true;
       // Dispatch play state
       dispatch("audiostate", { isPlaying, currentTime, duration });
+
+      // Ensure AudioContext is running (browser requirement)
+      if (audioContext && audioContext.state === "suspended") {
+        await audioContext.resume();
+      }
+
+      // Sync stems if we have them
+      if (audioStems && audioStems.length > 0) {
+        syncStemsToTimeline();
+      }
     });
 
     wavesurfer.on("pause", () => {
       isPlaying = false;
       // Dispatch pause state
       dispatch("audiostate", { isPlaying, currentTime, duration });
+
+      // Stop stems
+      stopStems();
+    });
+
+    wavesurfer.on("seek", () => {
+      // If playing and we have stems, restart them from new position
+      if (isPlaying && audioStems && audioStems.length > 0) {
+        syncStemsToTimeline();
+      }
     });
 
     wavesurfer.on("region-created", (region) => {
@@ -354,7 +541,12 @@
   function setVolume(value) {
     if (!wavesurfer) return;
     volume = value;
-    wavesurfer.setVolume(volume);
+    wavesurfer.setVolume(1); // Ensure volume is up by default
+
+    // Initial volume check
+    if (audioStems && audioStems.length > 0) {
+      updatePlaybackMode();
+    }
   }
 
   function setZoom(value) {

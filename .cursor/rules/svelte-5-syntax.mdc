@@ -157,7 +157,22 @@ let { count = 0 } = $props();
 ### Bindable Props
 ```javascript
 // ✅ Bindable props
-let { value = '' } = $bindable();
+let { value = $bindable() } = $props();
+```
+
+### Debugging
+```javascript
+// ✅ Inspect reactive state
+$inspect(count); // Logs whenever count changes
+```
+
+### Effect Timing
+```javascript
+// ✅ Run effect before DOM updates
+$effect.pre(() => {
+  // Runs before the DOM is updated
+  console.log('Before update:', div.offsetHeight);
+});
 ```
 
 ## Migration Checklist
