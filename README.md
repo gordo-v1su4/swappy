@@ -1,108 +1,204 @@
-# Swappy - Video Editing Application
+# Swappy v0.1
 
-A transient-driven video editing application built with Svelte 5. Upload a master audio track and individual stems, detect transients, and automatically switch between video clips based on waveform markers with FFmpeg integration for video processing.
+**Audio-reactive video editor with WebCodecs video playback, shader effects, and Svelte 5 runes.**
 
-## Features
+Combining smooth video playback from svelte-video-shaders with Swappy's audio analysis and editing features. Work in progress integrating hardware-accelerated video decoding with real-time shader effects.
 
-- **Advanced Audio Analysis**: Upload a master track and corresponding stems (e.g., vocals, drums, bass) for detailed transient detection.
-- **Stem-Based Control**: Toggle individual stems to control which transients are used for video switching.
-- **Video Management**: Upload multiple video clips with FFmpeg-powered thumbnail generation.
-- **Marker-Based Switching**: Automatically switch videos based on detected transients from the master track and selected stems.
-- **Customizable Timing**: Adjust markers per shot (1-12 markers) with a slider.
-- **Save/Load Projects**: Save your project, including all stem transient data, to a JSON file and load it back later.
-- **Video Position Memory**: Resume videos from where they left off when cycling back.
-- **Drag & Drop Reordering**: Rearrange video sequence in reordering mode.
-- **Real-time Playback**: Synchronized audio and video playback.
-- **FFmpeg Integration**: Browser-based video processing and thumbnail generation.
-- **Audio Visualization**: Real-time waveform visualization and analysis.
-- **Export Capabilities**: Export processed videos with custom settings.
+## Quick Start (Bun)
 
-## Quick Start
-
-Install dependencies:
+### 1. Install Dependencies
 
 ```bash
-pnpm install
+cd C:\Users\Gordo\Documents\Github\swappy
+
+# Install all dependencies with Bun
+bun install
+
+# Install video shader dependencies
+bun add three@^0.178.0 mp4box@^1.2.0 @types/three@^0.178.0
 ```
 
-Start the development server:
+### 2. Run Development Server
 
 ```bash
-pnpm run dev
+# Option A: Use helper script
+./bun-dev.sh dev      # Linux/macOS
+bun-dev.bat dev       # Windows
+
+# Option B: Direct Bun command
+bun --bun run vite --host --port 5174
 ```
 
-Open [http://localhost:5001](http://localhost:5001) in your browser.
+The app will be at: **http://localhost:5174**
 
-## How to Use
+### 3. Build & Preview
 
-1.  **Upload Master Track**: Click "Upload" in the "Master" section to load your main audio file.
-2.  **Upload Stems**: Click "Add" in the "Stems" section to upload individual audio stems (e.g., vocals, drums).
-3.  **Manage Transients**: Use the "Update Transients" button to filter and apply transients from the master and selected stems to the main timeline.
-4.  **Upload Videos**: Click "Batch Upload Videos" to add video clips.
-5.  **Set Marker Timing**: Use the "Markers per Shot" slider (1-12) to control video switching frequency.
-6.  **Play**: Hit the play button to start synchronized playback.
-7.  **Reorder Videos**: Toggle "Reorder Mode" to drag and drop video sequence.
-8.  **Save/Load**: Use the "Save Transients" and "Load Transients" buttons to save and load your project state.
+```bash
+# Build for production
+bun --bun run vite build
 
-## Project Structure
+# Preview production build
+./bun-dev.sh preview  # or: bun --bun run vite preview --port 5175
+```
+
+## Available Commands
+
+| Command | Description | Script |
+|---------|-------------|--------|
+| `bun --bun run vite` | Start dev server | `bun-dev.sh dev` |
+| `bun --bun run vite build` | Build for production | `bun-dev.sh build` |
+| `bun --bun run vite preview` | Preview build | `bun-dev.sh preview` |
+| `bun install` | Install dependencies | - |
+| `bun add <pkg>` | Add package | - |
+
+## Project Status
+
+### ✅ Working Features
+
+- Audio file upload and playback
+- Waveform visualization
+- Audio analysis (frequency bands, beat detection)
+- Basic video trimming interface
+- FFmpeg export functionality
+
+### 🔄 In Progress (Integration Phase)
+
+- WebCodecs video decoder components created
+- Shader video player component created
+- Audio analyzer enhanced with beat detection
+- **Not yet integrated into UI**
+
+### 📦 Components Created
 
 ```
 src/
-├── App.svelte              # Main application component
-├── AudioTimeline.svelte    # Audio waveform and analysis
-├── AudioVisualizer.svelte  # Real-time audio visualization
-├── VideoEditor.svelte      # Video management and synchronization
-├── VideoPlayer.svelte      # Main video playback component
-├── Markers.svelte          # Marker visualization
-├── AudioFileManager.svelte # Audio file and stem management
-├── ExportDialog.svelte     # Video export interface
-├── ffmpegService.js        # FFmpeg service for video processing
-└── main.js                 # Application entry point
+├── video/
+│   └── ShaderVideoPlayer.svelte    # WebCodecs + Three.js shader player
+├── AudioAnalyzerEnhanced.svelte    # Enhanced audio analysis
+├── VideoEditor.svelte              # Main video editor
+└── *(existing Swappy components)*
+
+lib/
+└── video/
+    └── video-codecs.js             # WebCodecs video processing
 ```
 
-## Technology Stack
+### 🎯 Next: Integration Tasks
 
-- **Frontend**: Svelte 5.34.7 (with runes system)
-- **Audio Processing**: WaveSurfer.js 7.9.5
-- **Video Processing**: FFmpeg WASM (@ffmpeg/ffmpeg 0.12.15)
-- **Build Tool**: Vite 6.3.5
-- **Package Manager**: pnpm
+See `INTEGRATION_TODO.md` for detailed plan.
 
-## Building for Production
+## Prerequisites
 
-Create an optimized build:
+- **Bun** package manager (faster than npm)
+- **Chrome 94+** or **Edge 94+** (WebCodecs API required)
+
+### Install Bun
 
 ```bash
-pnpm run build
+# Windows (PowerShell)
+powershell -c "irm bun.sh/install.ps1|iex"
+
+# macOS/Linux
+curl -fsSL https://bun.sh/install | bash
+
+# Verify
+bun --version
 ```
 
-Preview the production build:
+## Tech Stack
 
+- **Svelte 5** - Modern reactive framework with runes
+- **Vite** - Fast build tooling
+- **Bun** - Package manager & runtime
+- **WebCodecs API** - Hardware video decoding
+- **Three.js** - WebGL shader rendering
+- **wavesurfer.js** - Audio waveform visualization
+- **FFmpeg.wasm** - Video/audio processing
+
+## Browser Requirements
+
+- ✅ Chrome 94+ (Recommended)
+- ✅ Edge 94+
+- ❌ Firefox (WebCodecs not stable)
+- ❌ Safari (WebCodecs not implemented)
+
+## Troubleshooting
+
+### "bun command not found"
+
+Add Bun to PATH:
 ```bash
-pnpm run preview
+# Windows
+set PATH=C:\Users\Gordo\.bun\bin;%PATH%
+
+# Or use full path:
+C:\Users\Gordo\.bun\bin\bun.exe --version
+```
+
+### "Port already in use"
+
+Use different port:
+```bash
+bun --bun run vite --port 3000
+```
+
+### "Module not found" errors
+
+Reinstall dependencies:
+```bash
+rm -rf node_modules bun.lock
+bun install
+```
+
+## File Structure
+
+```
+Swappy/
+├── src/
+│   ├── lib/                 # Utils, video codecs, audio
+│   ├── routes/              # Page components
+│   ├── stories/             # Storybook stories
+│   ├── video/               # Video shader player (NEW)
+│   ├── AudioTimeline.svelte # Audio editor
+│   ├── VideoEditor.svelte   # Video editor
+│   └── App.svelte           # Main app
+├── public/                  # Static assets
+├── lib/                     # Library code
+│   └── video/
+│       └── video-codecs.js  # WebCodecs video (NEW)
+├── bun-workspace.json       # Bun configuration
+├── bun-dev.sh               # Unix helper script
+├── bun-dev.bat              # Windows helper script
+├── BUN_SETUP.md             # Bun setup guide
+├── INTEGRATION_TODO.md      # Integration plan
+└── package.json
 ```
 
 ## Development
 
-The application uses:
-- **WaveSurfer.js** for audio waveform visualization and playback
-- **FFmpeg WASM** for browser-based video processing and thumbnail generation
-- **Transient detection** algorithms for automatic video switching
-- **Drag & drop** API for video reordering
-- **File API** for video and audio uploads
-- **Svelte 5 runes** ($state, $derived, $effect) for reactive state management
+### Current Branch
 
-## Browser Support
+This is the **video-shader-integration** branch. The video shader system is being integrated into Swappy's existing audio editor.
 
-Modern browsers with support for:
-- Web Audio API
-- File API
-- HTML5 Video
-- ES6+ JavaScript features
-- SharedArrayBuffer (required for FFmpeg WASM)
-- Cross-Origin-Embedder-Policy (COEP) headers
-- Cross-Origin-Opener-Policy (COOP) headers
+### Related Projects
+
+- **svelte-video-shaders** - Reference video shader project with working WebCodecs implementation
+- Both projects use Svelte 5 and share components during integration
+
+### Running Both Projects
+
+```bash
+# Terminal 1: svelte-video-shaders (reference)
+cd C:\Users\Gordo\Documents\Github\svelte-video-shaders
+bun run dev
+# → http://localhost:5173
+
+# Terminal 2: swappy (integration target)
+cd C:\Users\Gordo\Documents\Github\swappy
+bun --bun run vite --port 5174
+# → http://localhost:5174
+```
 
 ## License
 
-MIT License
+MIT

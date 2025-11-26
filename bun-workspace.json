@@ -1,0 +1,32 @@
+{
+  "name": "swappy-bun-workspace",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "vite --host --port 5174",
+    "build": "vite build",
+    "preview": "vite preview --port 5175",
+    "bun-dev": "bun --bun vite --host --port 5174",
+    "bun-build": "bun --bun vite build",
+    "bun-preview": "bun --bun vite preview --port 5175",
+    "check": "svelte-check --tsconfig ./jsconfig.json",
+    "clean": "rm -rf dist .svelte-kit bun.lock",
+    "deps": "bun add three@^0.178.0 mp4box@^1.2.0 @types/three@^0.178.0"
+  },
+  "dependencies": {
+    "@ffmpeg/ffmpeg": "^0.12.15",
+    "@ffmpeg/util": "^0.12.2",
+    "wavesurfer.js": "^7.9.5",
+    "three": "^0.178.0",
+    "mp4box": "^1.2.0"
+  },
+  "devDependencies": {
+    "@sveltejs/vite-plugin-svelte": "^5.1.0",
+    "svelte": "^5.34.7",
+    "vite": "^6.3.5",
+    "@types/three": "^0.178.0",
+    "@types/node": "^22",
+    "svelte-check": "^4.0.0"
+  }
+}
