@@ -20,8 +20,7 @@ swappy/
 ├── src/                    # Main application source code
 ├── index.html              # Entry HTML file (Vite)
 ├── package.json            # Project dependencies and scripts
-├── package-lock.json       # npm lock file
-├── pnpm-lock.yaml          # pnpm lock file
+├── bun.lockb               # Bun lock file
 ├── vite.config.js          # Vite build configuration
 ├── .gitignore              # Git ignore patterns
 ├── README.md               # Project documentation
@@ -40,17 +39,24 @@ swappy/
 
 ### Audio Processing Components
 
-- **[AudioFileManager.svelte](mdc:src/AudioFileManager.svelte)** - Audio file and stem management, including transient analysis.
+- **[AudioFileManager.svelte](mdc:src/AudioFileManager.svelte)** - Audio file and stem management.
   - Handles master audio file upload and analysis
   - Manages stem files with automatic type detection
-  - Dispatches `masterSelected` event to update project title
-- **[AudioTimeline.svelte](mdc:src/AudioTimeline.svelte)** - Waveform visualization and transient filtering.
+  - Supports multi-track stem playback and muting
+  - Dispatches `masterSelected` and `stemsUpdated` events
+- **[AudioTimeline.svelte](mdc:src/AudioTimeline.svelte)** - Waveform visualization and playback.
+  - Handles transient detection and visualization
+  - Manages speed ramping and audio-reactive effects
+  - Synchronizes stem playback with the master track using Web Audio API
 - **[AudioVisualizer.svelte](mdc:src/AudioVisualizer.svelte)** - Real-time audio visualization
 - **[Markers.svelte](mdc:src/Markers.svelte)** - Marker visualization and interaction
 
 ### Video Processing Components
 
-- **[VideoEditor.svelte](mdc:src/VideoEditor.svelte)** - Video management and synchronization logic
+- **[VideoEditor.svelte](mdc:src/VideoEditor.svelte)** - Video management and auto-editing logic
+  - Handles video clip uploads and thumbnail generation
+  - Implements auto-editing based on audio markers
+  - Provides drag-and-drop reordering and premium UI controls
 - **[VideoPlayer.svelte](mdc:src/VideoPlayer.svelte)** - Main video playback component
 - **[ExportDialog.svelte](mdc:src/ExportDialog.svelte)** - Video export interface and settings
 
@@ -127,9 +133,9 @@ import * as utils from './utils.js';
 ## Development Workflow
 
 ### Scripts (from package.json)
-- `pnpm run dev` - Start development server
-- `pnpm run build` - Create production build
-- `pnpm run preview` - Preview production build
+- `bun run dev` - Start development server
+- `bun run build` - Create production build
+- `bun run preview` - Preview production build
 
 ### File Modification Guidelines
 - Update component documentation when changing public APIs

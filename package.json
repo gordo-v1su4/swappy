@@ -9,13 +9,13 @@
     "preview": "vite preview"
   },
   "devDependencies": {
-    "@sveltejs/vite-plugin-svelte": "^5.1.0",
-    "svelte": "^5.34.7",
-    "vite": "^6.3.5"
+    "@sveltejs/vite-plugin-svelte": "^5.1.1",
+    "svelte": "^5.43.14",
+    "vite": "^6.4.1"
   },
   "dependencies": {
     "@ffmpeg/ffmpeg": "^0.12.15",
     "@ffmpeg/util": "^0.12.2",
-    "wavesurfer.js": "^7.9.5"
+    "wavesurfer.js": "^7.11.1"
   }
 }
